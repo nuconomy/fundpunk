@@ -1,0 +1,128 @@
+# FundPunk V1
+
+FundPunk is the contract system. FundPunks is the public website for donation-based crowdfunding campaigns to buy original CryptoPunks through the original CryptoPunks marketplace contract.
+
+The premise is deliberately uncomfortable: no token, no fractional ownership, no art mint, no points, no expectation of return. Contributors give ETH to see whether a Punk can be crowdfunded as a pure gift. The first campaign is the creator asking the internet to help buy a Punk and prove the vision in public.
+
+FundPunks was partially inspired by [Buy Me A Punk](https://buymeapunk.xyz/), but removes the mint. No collectible wrapper. No consolation JPEG. Just the chain recording whether people gave anyway.
+
+Contributors donate ETH toward a campaign budget. Normal contributions are capped at the campaign budget; if the final contribution sends more than the remaining budget, the campaign records only the remaining amount and refunds the excess in the same transaction. Campaigns always use the original CryptoPunks marketplace contract:
+
+`0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB`
+
+Anyone can execute a purchase of any listed CryptoPunk before the execution deadline if the exact on-chain listing price is:
+
+- at or below the campaign budget,
+- at or below the executor's transaction-level max price, and
+- covered by the campaign's tracked contribution balance and current ETH balance.
+
+The contract pays the exact listing price, receives the Punk from the CryptoPunks marketplace, immediately transfers the Punk to the campaign creator in the same transaction, and sends any leftover ETH from a successful purchase to [Protocol Guild](https://protocol-guild.readthedocs.io/).
+
+[Protocol Guild](https://protocol-guild.readthedocs.io/) supports Ethereum protocol contributors. FundPunk sends successful-purchase change there as a small public-goods dividend from the campaign.
+
+Hardcoded Protocol Guild leftover recipient:
+
+`0x25941dC771bB64514Fc8abBce970307Fb9d477e9`
+
+The marketplace and donation recipient addresses are hardcoded in the contracts so campaign creators and modified frontends cannot redirect purchases or surplus funds.
+
+The factory architecture means anyone can create a campaign for a Punk forever, without needing the original creator's permission. The first campaign is personal; the mechanism is public.
+
+## Status
+
+This project is not production ready and has not been professionally audited. Do not use with real funds without a full smart-contract review, deployment review, and frontend review.
+
+Current known limitations:
+
+- The frontend reads `VITE_FACTORY_ADDRESS`; it is still a placeholder until deployment.
+- There is no deployment script yet.
+- The project targets the original hardcoded CryptoPunks marketplace, not OpenSea or Seaport.
+
+## Contracts
+
+- `contracts/FundPunkFactory.sol`: deploys campaign contracts and tracks created campaigns.
+- `contracts/FundPunkCampaign.sol`: accepts contributions, attempts CryptoPunk purchases through the hardcoded marketplace, transfers bought Punks, handles refunds, and donates purchase surplus to Protocol Guild.
+- `contracts/mocks/MockPunksMarket.sol`: test mock for the original CryptoPunks sale/transfer flow.
+
+## Web App
+
+The FundPunks web app is a Vite React interface in `web/`.
+
+It lets users:
+
+- create campaigns,
+- contribute ETH,
+- auto-load the first campaign launched by the factory as the featured campaign,
+- select later factory campaigns as suggested campaigns,
+- paste a campaign address manually,
+- attempt a permissionless Punk purchase, and
+- claim refunds after creator cancellation or execution expiry if no purchase succeeds.
+
+## Setup
+
+Use Node.js 22 LTS or another Hardhat-supported even-numbered Node version.
+
+Install dependencies:
+
+```bash
+npm ci --ignore-scripts
+cd web
+npm ci --ignore-scripts --legacy-peer-deps
+cp .env.example .env
+cd ..
+```
+
+Set `web/.env` after deployment:
+
+```bash
+VITE_FACTORY_ADDRESS=0x...
+```
+
+Run contract tests:
+
+```bash
+npx hardhat test
+```
+
+Run frontend checks:
+
+```bash
+cd web
+npm run lint
+npm run build
+```
+
+Run the local web app:
+
+```bash
+cd web
+npm run dev
+```
+
+## Safety Notes
+
+FundPunk campaigns do not issue ownership tokens, governance rights, claims on the Punk, refunds after a successful purchase, or financial returns.
+
+If no purchase succeeds by the execution deadline, contributors can claim refunds after the execution deadline for their recorded contributions. There is no refund-claim expiry in the current contract.
+
+Before a purchase succeeds, the campaign creator can cancel early and immediately enable claimable refunds. This is intended as an emergency exit if a security issue, configuration issue, or other reason makes it unsafe to keep accepting contributions or attempting buys.
+
+If a purchase succeeds, any leftover ETH is donated to the hardcoded Protocol Guild address.
+
+The purchase path is atomic. A successful `attemptBuy` must complete the CryptoPunks purchase, transfer the Punk from the campaign contract to the creator, and donate leftover ETH to Protocol Guild. If any of those post-purchase steps fail, the whole transaction reverts and the purchase does not stick.
+
+Plain ETH transfers to a campaign during funding are recorded as normal contributions and are subject to the same budget cap and excess-refund behavior. Plain ETH transfers outside the funding state revert. ETH that reaches the campaign without running contract code, such as forced ETH, is treated as untracked surplus: it does not increase the refundable contribution balance or the tracked purchase pool, and it can be donated to Protocol Guild without reducing contributor refunds.
+
+## FAQ
+
+### What do I get?
+
+Nothing. No token, no claim, no governance, no financial upside. You get the memory of having done something extremely onchain.
+
+### Is this audited?
+
+No. This is reckless, but contributors are gifting money anyway. If the contract is hacked, everyone involved can treat it as an expensive lesson.
+
+### Why Protocol Guild?
+
+If a Punk is bought below the amount raised, the leftover ETH goes to [Protocol Guild](https://protocol-guild.readthedocs.io/), a well-known Ethereum public-goods recipient. The recipient is hardcoded as `0x25941dC771bB64514Fc8abBce970307Fb9d477e9`, so campaign creators and modified frontends cannot redirect the change.
