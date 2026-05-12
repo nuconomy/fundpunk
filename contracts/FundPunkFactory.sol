@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {FundPunkCampaign} from "./FundPunkCampaign.sol";
 
 contract FundPunkFactory {
+    uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
+
     address[] public campaigns;
 
     event CampaignCreated(
@@ -21,6 +23,8 @@ contract FundPunkFactory {
         uint64 fundingDeadline,
         uint64 executionDeadline
     ) external returns (address campaign) {
+        require(executionDeadline <= block.timestamp + MAX_CAMPAIGN_DURATION, "duration > max");
+
         FundPunkCampaign c = new FundPunkCampaign(
             purchaseBudgetWei,
             fundingDeadline,

@@ -159,6 +159,21 @@ describe("FundPunk V1B", function () {
     expect(await campaign.cryptopunksMarket()).to.equal(market.target);
   });
 
+  it("rejects campaigns longer than one year", async function () {
+    const { a, factory } = await deployFixture();
+    const now = (await ethers.provider.getBlock("latest")).timestamp;
+    const tooLate = now + 366 * 24 * 60 * 60;
+
+    await expect(
+      factory.createCampaign(ethers.parseEther("1"), now + 3600, tooLate)
+    ).to.be.revertedWith("duration > max");
+
+    const Campaign = await ethers.getContractFactory("FundPunkCampaign");
+    await expect(
+      Campaign.deploy(ethers.parseEther("1"), now + 3600, tooLate, a.address)
+    ).to.be.revertedWith("duration > max");
+  });
+
   it("paginates created campaigns for long-lived factory reads", async function () {
     const { factory } = await deployFixture();
     const now = (await ethers.provider.getBlock("latest")).timestamp;

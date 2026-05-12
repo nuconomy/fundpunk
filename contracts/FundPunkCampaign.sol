@@ -25,6 +25,7 @@ contract FundPunkCampaign is ReentrancyGuard {
     address public immutable creator;
     address public constant cryptopunksMarket = 0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB;
     address public constant PROTOCOL_GUILD = 0x25941dC771bB64514Fc8abBce970307Fb9d477e9;
+    uint256 public constant MAX_CAMPAIGN_DURATION = 365 days;
     uint8 public constant REFUND_REASON_CREATOR_CANCELLED = 1;
     uint8 public constant REFUND_REASON_EXPIRED = 2;
 
@@ -60,6 +61,7 @@ contract FundPunkCampaign is ReentrancyGuard {
         require(_purchaseBudgetWei > 0, "budget=0");
         require(_fundingDeadline > block.timestamp, "funding deadline");
         require(_executionDeadline > _fundingDeadline, "exec <= funding");
+        require(_executionDeadline <= block.timestamp + MAX_CAMPAIGN_DURATION, "duration > max");
         require(_creator != address(0), "creator=0");
 
         creator = _creator;

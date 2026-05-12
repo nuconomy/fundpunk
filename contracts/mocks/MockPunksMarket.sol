@@ -36,7 +36,6 @@ contract MockPunksMarket {
         require(offer.isForSale, "not for sale");
         require(offer.punkIndex == punkId, "wrong punk");
         require(offer.seller == punkIndexToAddress[punkId], "seller mismatch");
-        require(offer.seller != msg.sender, "seller is buyer");
         require(offer.onlySellTo == address(0) || offer.onlySellTo == msg.sender, "not allowed");
         require(msg.value >= offer.minValue, "price too low");
         punkIndexToAddress[punkId] = wrongOwnerAfterBuy == address(0) ? msg.sender : wrongOwnerAfterBuy;

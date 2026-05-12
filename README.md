@@ -10,6 +10,8 @@ Contributors donate ETH toward a campaign budget. Normal contributions are cappe
 
 `0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB`
 
+Campaigns must finish within one year of creation. The public frontend defaults to a 30-day funding window plus a 30-day execution window.
+
 Anyone can execute a purchase of any listed CryptoPunk before the execution deadline if the exact on-chain listing price is:
 
 - at or below the campaign budget,
@@ -34,8 +36,7 @@ This project is not production ready and has not been professionally audited. Do
 
 Current known limitations:
 
-- The frontend reads `VITE_FACTORY_ADDRESS`; it is still a placeholder until deployment.
-- There is no deployment script yet.
+- The frontend reads `VITE_FACTORY_ADDRESS`; set it to the deployed factory address before building the static site.
 - The project targets the original hardcoded CryptoPunks marketplace, not OpenSea or Seaport.
 
 ## Contracts
@@ -84,12 +85,35 @@ Run contract tests:
 npx hardhat test
 ```
 
+Run a local mainnet-fork rehearsal against the real CryptoPunks contract:
+
+```bash
+npx hardhat node --fork "$MAINNET_RPC_URL"
+```
+
+In another terminal, deploy and create a local fork campaign, then run:
+
+```bash
+CAMPAIGN_ADDRESS=0x... \
+PUNK_ID=7502 \
+MAX_PRICE_ETH=30 \
+npx hardhat run scripts/fork-rehearsal.cjs --network localhost
+```
+
+The rehearsal contributes fork ETH, attempts to buy the specified listed Punk through the real CryptoPunks marketplace on the fork, verifies the creator receives the Punk, verifies the campaign balance is zero, and verifies leftover ETH is sent to the hardcoded Protocol Guild recipient. It refuses non-local networks.
+
 Run frontend checks:
 
 ```bash
 cd web
 npm run lint
 npm run build
+```
+
+Deploy the factory:
+
+```bash
+npx hardhat run scripts/deploy.cjs --network mainnet
 ```
 
 Run the local web app:
@@ -104,6 +128,10 @@ npm run dev
 FundPunk campaigns do not issue ownership tokens, governance rights, claims on the Punk, refunds after a successful purchase, or financial returns.
 
 If no purchase succeeds by the execution deadline, contributors can claim refunds after the execution deadline for their recorded contributions. There is no refund-claim expiry in the current contract.
+
+Anyone can call `enableRefundsIfExpired()` after the execution deadline to explicitly mark the campaign as refunding and emit the refund event. This is only a convenience for interfaces and observers; `claimRefund()` will also enable refunds automatically for the first valid claimant after expiry.
+
+Refunds are pull-based and sent to the original contributor address. If a contributor is a smart contract or wallet that cannot receive ETH, its refund claim will revert and its contribution can remain locked in V1. Contributors should use an address that can receive plain ETH refunds.
 
 Before a purchase succeeds, the campaign creator can cancel early and immediately enable claimable refunds. This is intended as an emergency exit if a security issue, configuration issue, or other reason makes it unsafe to keep accepting contributions or attempting buys.
 

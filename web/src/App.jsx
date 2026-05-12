@@ -92,8 +92,8 @@ function Field({ label, children }) {
 function AppInner() {
   const [campaignAddr, setCampaignAddr] = useState('')
   const [budgetEth, setBudgetEth] = useState('31')
-  const [fundDays, setFundDays] = useState('3')
-  const [execDays, setExecDays] = useState('7')
+  const [fundDays, setFundDays] = useState('30')
+  const [execDays, setExecDays] = useState('30')
 
   const [contribEth, setContribEth] = useState('0.1')
   const [buyPunkId, setBuyPunkId] = useState('')
@@ -443,7 +443,7 @@ function AppInner() {
           </article>
           <article>
             <h3>Can I get a refund?</h3>
-            <p>Only if the creator cancels before purchase or no purchase succeeds by the execution deadline. After a successful Punk buy, refunds are not the vibe.</p>
+            <p>Only if the creator cancels before purchase or no purchase succeeds by the execution deadline. Refunds go back to the contributor address, so use a wallet that can receive ETH.</p>
           </article>
           <article className="faq-card-yellow">
             <h3>What is a campaign?</h3>
