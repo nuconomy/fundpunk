@@ -81,7 +81,7 @@ h3 {
 }
 
 .app-shell {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 20px 0 56px;
 }
@@ -181,7 +181,7 @@ a.button:hover {
 }
 
 .hero-section {
-  min-height: calc(100svh - 112px);
+  min-height: clamp(620px, calc(100svh - 112px), 760px);
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
   align-items: center;
@@ -190,6 +190,7 @@ a.button:hover {
 }
 
 .hero-copy {
+  min-width: 0;
   max-width: 690px;
 }
 
@@ -210,6 +211,7 @@ h1 {
   font-size: 74px;
   line-height: 0.94;
   letter-spacing: 0;
+  overflow-wrap: break-word;
 }
 
 .lede {
@@ -228,6 +230,7 @@ h1 {
 }
 
 .hero-visual {
+  min-width: 0;
   min-height: 520px;
   display: grid;
   place-items: center;
@@ -248,10 +251,18 @@ h1 {
 }
 
 .punk-frame img {
-  width: 100%;
-  max-width: 360px;
+  width: min(100%, 312px);
+  aspect-ratio: 1;
+  border: 2px solid var(--ink);
+  padding: 24px;
+  background:
+    linear-gradient(90deg, rgba(234, 52, 176, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(234, 52, 176, 0.12) 1px, transparent 1px),
+    var(--paper);
+  background-size: 18px 18px;
   justify-self: center;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .punk-caption {
@@ -287,21 +298,46 @@ h1 {
 }
 
 .thesis-band {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px;
+  width: min(100%, 840px);
+  margin: 14px auto 60px;
+  padding: 22px;
+  background: #fff9fd;
+  box-shadow: 4px 4px 0 rgba(234, 52, 176, 0.62);
+}
+
+.thesis-band blockquote {
+  position: relative;
+  margin: 10px 0 0;
+  padding-left: 20px;
+  border-left: 4px solid rgba(234, 52, 176, 0.45);
 }
 
 .thesis-band p {
-  max-width: 800px;
+  max-width: 760px;
   margin-top: 8px;
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 760;
-  line-height: 1.35;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.quote-credit {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quote-credit a {
+  color: var(--pink);
+  text-decoration: none;
+}
+
+.quote-credit a:hover {
+  text-decoration: underline;
 }
 
 .campaign-layout {
@@ -309,6 +345,12 @@ h1 {
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
   gap: 24px;
   margin-top: 28px;
+}
+
+.campaign-layout > *,
+.bottom-cta > div,
+.thesis-band > div {
+  min-width: 0;
 }
 
 .campaign-panel,
@@ -442,7 +484,7 @@ h1 {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin-top: 20px;
   border: 2px solid var(--ink);
@@ -473,6 +515,78 @@ h1 {
   font-size: 18px;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+
+.funding-progress {
+  display: grid;
+  gap: 14px;
+  border: 2px solid var(--ink);
+  border-top: 0;
+  padding: 18px;
+  background: #ffe5f6;
+}
+
+.progress-heading,
+.progress-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.progress-heading h3 {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.progress-heading p,
+.progress-copy {
+  color: var(--muted);
+}
+
+.progress-heading p {
+  font-size: 15px;
+}
+
+.progress-heading strong {
+  color: var(--ink);
+}
+
+.progress-meter > strong {
+  min-width: 82px;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1;
+  text-align: right;
+}
+
+.progress-copy {
+  max-width: 760px;
+  font-size: 16px;
+}
+
+.progress-copy strong {
+  color: var(--ink);
+}
+
+.funding-progress span {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 18px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--pink);
 }
 
 .address-list {
@@ -517,6 +631,82 @@ code {
   border-color: var(--red);
 }
 
+.control-panel {
+  margin-top: 18px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  box-shadow: 6px 6px 0 var(--pink);
+  color: #fff;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+}
+
+.danger-zone.control-panel {
+  border-color: var(--ink);
+}
+
+.control-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.control-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-panel .eyebrow {
+  color: var(--yellow);
+}
+
+.control-panel h3 {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.control-panel summary p {
+  margin-top: 6px;
+  color: #d8d0de;
+  font-size: 14px;
+}
+
+.control-panel-toggle {
+  min-width: 112px;
+  border: 2px solid var(--pink);
+  padding: 7px 10px;
+  background: var(--pink);
+  color: #fff;
+  box-shadow: 3px 3px 0 var(--yellow);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.control-panel-toggle .when-open,
+.control-panel[open] .control-panel-toggle .when-closed {
+  display: none;
+}
+
+.control-panel[open] .control-panel-toggle .when-open {
+  display: inline;
+}
+
+.control-panel-body {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 14px 16px 16px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
 .button-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -545,9 +735,9 @@ code {
 }
 
 .bottom-cta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.45fr);
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
   margin-top: 28px;
   background: #ffe5f6;
@@ -620,6 +810,15 @@ code {
   max-width: 660px;
   margin-top: 8px;
   color: var(--muted);
+}
+
+.bottom-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.bottom-actions .button {
+  width: 100%;
 }
 
 .site-footer {
@@ -696,17 +895,17 @@ code {
 
   .lede,
   .thesis-band p {
-    font-size: 19px;
+    font-size: 18px;
   }
 
   .thesis-band {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .bottom-cta {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .guild-feature {
@@ -730,7 +929,7 @@ code {
   }
 
   .app-shell {
-    width: min(100% - 56px, 520px);
+    width: min(calc(100vw - 28px), 520px);
     padding-top: 12px;
   }
 
@@ -751,7 +950,7 @@ code {
   }
 
   h1 {
-    font-size: 42px;
+    font-size: 38px;
     line-height: 0.98;
   }
 
@@ -783,7 +982,8 @@ code {
   }
 
   .punk-frame img {
-    max-width: 300px;
+    width: min(100%, 260px);
+    padding: 18px;
   }
 
   .punk-caption strong {
@@ -791,19 +991,42 @@ code {
   }
 
   .status-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .metric:nth-child(2) {
+  .progress-heading,
+  .progress-meter {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .progress-meter > strong {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .progress-track {
+    width: 100%;
+  }
+
+  .metric {
     border-right: 0;
   }
 
-  .metric:nth-child(1),
-  .metric:nth-child(2) {
+  .metric:not(:last-child) {
     border-bottom: 2px solid var(--ink);
   }
 
   .button-row {
     grid-template-columns: 1fr;
+  }
+
+  .control-panel summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .control-panel-toggle {
+    width: 100%;
   }
 }

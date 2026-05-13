@@ -28,6 +28,14 @@ Hardcoded Protocol Guild leftover recipient:
 
 The marketplace and donation recipient addresses are hardcoded in the contracts so campaign creators and modified frontends cannot redirect purchases or surplus funds.
 
+Deployed mainnet factory:
+
+`0x95d75D46A32C865CCdfa04490b0A9619bFBA9067`
+
+First mainnet campaign:
+
+`0xF6AB3893d5C397d53ef37E18b135d6a2d8b0c1AE`
+
 The factory architecture means anyone can create a campaign for a Punk forever, without needing the original creator's permission. The first campaign is personal; the mechanism is public.
 
 ## Status
@@ -73,11 +81,18 @@ cp .env.example .env
 cd ..
 ```
 
-Set `web/.env` after deployment:
+Set `web/.env` before building the static site:
 
 ```bash
-VITE_FACTORY_ADDRESS=0x...
+VITE_FACTORY_ADDRESS=0x95d75D46A32C865CCdfa04490b0A9619bFBA9067
+VITE_FEATURED_CAMPAIGN_ADDRESS=0xF6AB3893d5C397d53ef37E18b135d6a2d8b0c1AE
+VITE_SUGGESTED_CAMPAIGN_ADDRESSES=
+VITE_MAINNET_RPC_URL=https://ethereum-rpc.publicnode.com
 ```
+
+`VITE_FEATURED_CAMPAIGN_ADDRESS` can be set to the first campaign so the static site can show it immediately even before reading the factory. `VITE_SUGGESTED_CAMPAIGN_ADDRESSES` is an optional comma-separated list.
+
+`VITE_MAINNET_RPC_URL` is a browser-visible read-only RPC endpoint used for logged-out campaign stats. It is not treated as a secret. Transactions still go through the user's injected wallet. If a gateway or host blocks external RPC requests with Content Security Policy, the site can still show baked campaign addresses, but live balances/state require a host with an allowed `connect-src` policy or a small server-side proxy.
 
 Run contract tests:
 
