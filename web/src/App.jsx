@@ -92,8 +92,15 @@ function Field({ label, children }) {
   )
 }
 
+function getInitialCampaignAddress() {
+  if (typeof window === 'undefined') return ''
+
+  const candidate = new URLSearchParams(window.location.search).get('campaign') || ''
+  return isAddress(candidate) ? candidate : ''
+}
+
 function AppInner() {
-  const [campaignAddr, setCampaignAddr] = useState('')
+  const [campaignAddr, setCampaignAddr] = useState(getInitialCampaignAddress)
   const [budgetEth, setBudgetEth] = useState('31')
   const [fundDays, setFundDays] = useState('30')
   const [execDays, setExecDays] = useState('30')
@@ -143,7 +150,23 @@ function AppInner() {
 
   const featuredCampaign = factoryCampaignList[0]
   const suggestedCampaigns = factoryCampaignList.slice(1)
-  const selectedCampaignAddr = isAddress(campaignAddr) ? campaignAddr : featuredCampaign || ''
+  const factoryCampaignSet = useMemo(
+    () => new Set(factoryCampaignList.map((address) => address.toLowerCase())),
+    [factoryCampaignList],
+  )
+  const requestedCampaignAddr = isAddress(campaignAddr) ? campaignAddr : ''
+  const requestedCampaignIsKnown = requestedCampaignAddr
+    ? factoryCampaignSet.has(requestedCampaignAddr.toLowerCase())
+    : false
+  const selectedCampaignAddr = requestedCampaignAddr
+    ? (requestedCampaignIsKnown ? requestedCampaignAddr : '')
+    : featuredCampaign || ''
+  const requestedCampaignUnknown = Boolean(
+    requestedCampaignAddr && !requestedCampaignIsKnown && factoryCampaigns.data,
+  )
+  const requestedCampaignChecking = Boolean(
+    requestedCampaignAddr && !requestedCampaignIsKnown && !factoryCampaigns.data,
+  )
   const campaignEnabled = isAddress(selectedCampaignAddr)
   const campaignReadEnabled = campaignEnabled && hasReadTransport
 
@@ -263,14 +286,14 @@ function AppInner() {
           <span className="eyebrow">Why this exists</span>
           <blockquote>
             <p>
-              Recently I watched someone raise 33 ETH from 836 strangers to crowdfund a CryptoPunk. It was onchain, fascinating, and still needed a final action from the creator to actually buy the Punk.
+              Recently I saw someone had raised over 33 ETH from 836 strangers to crowdfund a CryptoPunk. It was novel, it was onchain, but it still took a full day for the creator to actually buy the Punk.
             </p>
             <p>
-              FundPunks takes that spark somewhere stranger: pure donation crowdfunding, no mint, and a buy anyone can trigger once the target is hit.
+              So I created an onchain way for anyone to crowdfund a CryptoPunk and as soon as the target balance is achieved anyone can force trigger the buy with any change going to public goods.
             </p>
           </blockquote>
           <span className="quote-credit">
-            - <a href="https://x.com/nuconomy" target="_blank" rel="noreferrer">@nuconomy.eth</a>, after seeing{' '}
+            - <a href="https://x.com/nuconomy" target="_blank" rel="noreferrer">@nuconomy.eth</a>, on Farcaster after seeing{' '}
             <a href="https://buymeapunk.xyz/" target="_blank" rel="noreferrer">Buy Me A Punk</a>
           </span>
         </div>
@@ -281,7 +304,7 @@ function AppInner() {
           <div className="section-heading">
             <span className="eyebrow">Launch campaign</span>
             <h2>The first FundPunks campaign is live.</h2>
-            <p>I&apos;m using it to ask the internet to help fund a Punk for nuconomy.eth. Donate here, or paste any live campaign address to inspect and support someone else&apos;s Punk dream.</p>
+            <p>I&apos;m using it to ask the internet to help fund a Punk for nuconomy.eth. Donate here, or paste any factory-created campaign address to inspect and support someone else&apos;s Punk dream.</p>
           </div>
 
           <div className="campaign-picker" aria-label="Live campaigns">
@@ -321,14 +344,20 @@ function AppInner() {
             )}
           </div>
 
-          <Field label="Paste a different campaign address">
+          <Field label="Paste a FundPunks campaign address">
             <input
               value={campaignAddr}
               onChange={(e) => setCampaignAddr(e.target.value)}
-              placeholder={selectedCampaignAddr || '0x...'}
+              placeholder={selectedCampaignAddr || featuredCampaign || '0x...'}
               spellCheck="false"
             />
           </Field>
+          {requestedCampaignChecking && (
+            <p className="form-note">Checking this campaign against the verified factory...</p>
+          )}
+          {requestedCampaignUnknown && (
+            <p className="form-note warning-note">This address is not listed by the verified FundPunks factory, so campaign actions are disabled.</p>
+          )}
 
             <div className="status-grid">
               <div className="metric">

@@ -387,6 +387,11 @@ h1 {
   font-size: 14px;
 }
 
+.warning-note {
+  color: var(--red);
+  font-weight: 800;
+}
+
 .field {
   display: grid;
   gap: 8px;

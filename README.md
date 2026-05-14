@@ -63,9 +63,15 @@ It lets users:
 - contribute ETH,
 - auto-load the first campaign launched by the factory as the featured campaign,
 - select later factory campaigns as suggested campaigns,
-- paste a campaign address manually,
+- paste or directly link to a factory-created campaign,
 - attempt a permissionless Punk purchase, and
 - claim refunds after creator cancellation or execution expiry if no purchase succeeds.
+
+Campaign deep links use the query string form:
+
+`https://fundpunks.eth.limo/?campaign=0x...`
+
+The frontend only enables campaign actions for addresses listed by the configured FundPunk factory, so a deep link cannot turn the site into a donation page for an arbitrary contract.
 
 ## Setup
 
@@ -93,6 +99,25 @@ VITE_MAINNET_RPC_URL=https://ethereum-rpc.publicnode.com
 `VITE_FEATURED_CAMPAIGN_ADDRESS` can be set to the first campaign so the static site can show it immediately even before reading the factory. `VITE_SUGGESTED_CAMPAIGN_ADDRESSES` is an optional comma-separated list.
 
 `VITE_MAINNET_RPC_URL` is a browser-visible read-only RPC endpoint used for logged-out campaign stats. It is not treated as a secret. Transactions still go through the user's injected wallet. If a gateway or host blocks external RPC requests with Content Security Policy, the site can still show baked campaign addresses, but live balances/state require a host with an allowed `connect-src` policy or a small server-side proxy.
+
+Verify the factory after deployment:
+
+```bash
+MAINNET_RPC_URL=https://... \
+ETHERSCAN_API_KEY=... \
+npx hardhat verify --network mainnet 0x95d75D46A32C865CCdfa04490b0A9619bFBA9067
+```
+
+Verify a campaign after it is created:
+
+```bash
+MAINNET_RPC_URL=https://... \
+ETHERSCAN_API_KEY=... \
+CAMPAIGN_ADDRESS=0x... \
+npx hardhat run scripts/verify-campaign.cjs --network mainnet
+```
+
+Each campaign is a separate contract deployed by the verified factory. Etherscan verification is still an offchain step, so new campaign creators should verify their campaign contract after launch.
 
 Run contract tests:
 
