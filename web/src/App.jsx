@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { createConfig, http, useAccount, useConnect, useDisconnect, useReadContract, useWriteContract } from 'wagmi'
+import { useEffect, useMemo, useState } from 'react'
+import { createConfig, http, useAccount, useConnect, useDisconnect, useEnsName, useReadContract, useWriteContract } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 import { WagmiProvider } from 'wagmi'
@@ -83,12 +83,54 @@ function shortAddress(value) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
+function formatDateTime(seconds) {
+  if (!seconds) return '...'
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(Number(seconds) * 1000))
+}
+
+function formatTimeRemaining(seconds, nowMs) {
+  if (!seconds) return '...'
+
+  const remainingSeconds = Math.max(0, Number(seconds) - Math.floor(nowMs / 1000))
+  if (remainingSeconds === 0) return 'Expired'
+
+  const days = Math.floor(remainingSeconds / 86400)
+  const hours = Math.floor((remainingSeconds % 86400) / 3600)
+  const minutes = Math.floor((remainingSeconds % 3600) / 60)
+
+  if (days > 1) return `${days} days`
+  if (days === 1) return hours > 0 ? `1 day ${hours}h` : '1 day'
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${Math.max(1, minutes)}m`
+}
+
 function Field({ label, children }) {
   return (
     <label className="field">
       <span>{label}</span>
       {children}
     </label>
+  )
+}
+
+function CampaignMetaRow({ label, value }) {
+  const address = isAddress(value) ? value : undefined
+  const ensName = useEnsName({
+    address,
+    chainId: mainnet.id,
+    query: { enabled: Boolean(address && hasReadTransport) },
+  })
+
+  return (
+    <div>
+      <span>{label}</span>
+      {ensName.data && <strong className="ens-name">{ensName.data}</strong>}
+      <code>{value || '...'}</code>
+    </div>
   )
 }
 
@@ -108,6 +150,12 @@ function AppInner() {
   const [contribEth, setContribEth] = useState('0.1')
   const [buyPunkId, setBuyPunkId] = useState('')
   const [buyMaxEth, setBuyMaxEth] = useState('31')
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const { address, isConnected } = useAccount()
   const { connect } = useConnect()
@@ -173,7 +221,14 @@ function AppInner() {
   const budget = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'purchaseBudgetWei', query: { enabled: campaignReadEnabled } })
   const raised = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'totalRaised', query: { enabled: campaignReadEnabled } })
   const state = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'getState', query: { enabled: campaignReadEnabled } })
+  const fundingDeadline = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'fundingDeadline', query: { enabled: campaignReadEnabled } })
+  const executionDeadline = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'executionDeadline', query: { enabled: campaignReadEnabled } })
   const creator = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'creator', query: { enabled: campaignReadEnabled } })
+  const creatorEnsName = useEnsName({
+    address: isAddress(creator.data) ? creator.data : undefined,
+    chainId: mainnet.id,
+    query: { enabled: Boolean(isAddress(creator.data) && hasReadTransport) },
+  })
   const market = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'cryptopunksMarket', query: { enabled: campaignReadEnabled } })
   const donation = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'donationRecipient', query: { enabled: campaignReadEnabled } })
   const progressPct = budget.data && budget.data > 0n && raised.data !== undefined
@@ -185,6 +240,47 @@ function AppInner() {
   const progressLabel = campaignReadEnabled && budget.data
     ? `${progressPct.toFixed(progressPct >= 10 ? 0 : 1)}%`
     : '...'
+  const stateValue = Number(state.data ?? 0)
+  const activeDeadline = stateValue === 1
+    ? executionDeadline.data
+    : stateValue === 0
+      ? fundingDeadline.data
+      : undefined
+  const activeDeadlineLabel = stateValue === 1
+    ? 'Buying window ends'
+    : stateValue === 0
+      ? 'Funding ends'
+      : stateValue === 2
+        ? 'Campaign status'
+        : 'Refund status'
+  const timeRemainingLabel = campaignReadEnabled && activeDeadline
+    ? formatTimeRemaining(activeDeadline, nowMs)
+    : stateValue === 2
+      ? 'Resolved'
+      : stateValue === 3
+        ? 'Claimable'
+        : '...'
+  const deadlineDateLabel = campaignReadEnabled && activeDeadline
+    ? formatDateTime(activeDeadline)
+    : stateValue === 2
+      ? 'Punk bought'
+      : stateValue === 3
+      ? 'Refunds open'
+      : '...'
+  const selectedCampaignIsFeatured = Boolean(
+    featuredCampaign &&
+    selectedCampaignAddr &&
+    selectedCampaignAddr.toLowerCase() === featuredCampaign.toLowerCase(),
+  )
+  const creatorDisplayLabel = creatorEnsName.data || (isAddress(creator.data) ? shortAddress(creator.data) : '')
+  const campaignHeading = selectedCampaignIsFeatured
+    ? 'The first FundPunks campaign is live.'
+    : 'This FundPunks campaign is live.'
+  const campaignIntro = selectedCampaignIsFeatured
+    ? 'You are viewing the launch campaign from the creator of FundPunks. Donate here, or paste any factory-created campaign address to inspect and support another Punk dream.'
+    : creatorDisplayLabel
+      ? `You are viewing a factory-created FundPunks campaign launched by ${creatorDisplayLabel}. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.`
+      : 'You are viewing a factory-created FundPunks campaign. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.'
 
   async function createCampaign() {
     const now = Math.floor(Date.now() / 1000)
@@ -302,29 +398,24 @@ function AppInner() {
       <section id="campaign" className="campaign-layout">
         <div className="campaign-panel">
           <div className="section-heading">
-            <span className="eyebrow">Launch campaign</span>
-            <h2>The first FundPunks campaign is live.</h2>
-            <p>I&apos;m using it to ask the internet to help fund a Punk for nuconomy.eth. Donate here, or paste any factory-created campaign address to inspect and support someone else&apos;s Punk dream.</p>
+            <span className="eyebrow">Launch campaign live</span>
+            <h2>{campaignHeading}</h2>
+            <p>{campaignIntro}</p>
           </div>
 
-          <div className="campaign-picker" aria-label="Live campaigns">
-            <div className="campaign-picker-heading">
-              <span>Featured campaign</span>
-              <strong>{featuredCampaign ? 'Created by nuconomy.eth' : 'Waiting for factory deployment'}</strong>
+          <div className="campaign-selector" aria-label="Campaign selector">
+            <div className="campaign-selector-heading">
+              <span>{selectedCampaignIsFeatured ? 'Featured campaign' : 'Selected campaign'}</span>
+              <strong>{campaignEnabled ? `Launched by ${creatorDisplayLabel || shortAddress(creator.data)}` : 'Waiting for factory deployment'}</strong>
             </div>
-
-            {featuredCampaign ? (
-              <button
-                className={`campaign-choice featured ${selectedCampaignAddr.toLowerCase() === featuredCampaign.toLowerCase() ? 'selected' : ''}`}
-                onClick={() => setCampaignAddr(featuredCampaign)}
-              >
-                <span>Featured</span>
-                <strong>{shortAddress(featuredCampaign)}</strong>
-              </button>
-            ) : (
-              <p className="campaign-empty">Once the factory is deployed, the first campaign it launched will load here automatically.</p>
-            )}
-
+            <Field label="Campaign address">
+              <input
+                value={campaignAddr}
+                onChange={(e) => setCampaignAddr(e.target.value)}
+                placeholder={selectedCampaignAddr || featuredCampaign || '0x...'}
+                spellCheck="false"
+              />
+            </Field>
             {suggestedCampaigns.length > 0 && (
               <div className="suggested-campaigns">
                 <span>Suggested campaigns</span>
@@ -342,16 +433,10 @@ function AppInner() {
                 </div>
               </div>
             )}
+            {!featuredCampaign && (
+              <p className="campaign-empty">Once the factory is deployed, the first campaign it launched will load here automatically.</p>
+            )}
           </div>
-
-          <Field label="Paste a FundPunks campaign address">
-            <input
-              value={campaignAddr}
-              onChange={(e) => setCampaignAddr(e.target.value)}
-              placeholder={selectedCampaignAddr || featuredCampaign || '0x...'}
-              spellCheck="false"
-            />
-          </Field>
           {requestedCampaignChecking && (
             <p className="form-note">Checking this campaign against the verified factory...</p>
           )}
@@ -392,64 +477,59 @@ function AppInner() {
                   ? 'Target met. Anyone onchain can try to buy a listed Punk that fits the campaign limits.'
                   : 'Live progress loads from mainnet.'}
             </p>
-          </div>
-
-          <div className="address-list">
-            <div>
-              <span>Selected campaign</span>
-              <code>{selectedCampaignAddr || '...'}</code>
-            </div>
-            <div>
-              <span>Creator receives the Punk</span>
-              <code>{creator.data || '...'}</code>
-            </div>
-            <div>
-              <span>Original CryptoPunks market</span>
-              <code>{market.data || '...'}</code>
-            </div>
-            <div>
-              <span>Change goes to Protocol Guild</span>
-              <code>{donation.data || '...'}</code>
+            <div className="deadline-strip" aria-label="Campaign timing">
+              <div>
+                <span>{activeDeadlineLabel}</span>
+                <strong>{deadlineDateLabel}</strong>
+              </div>
+              <div>
+                <span>Time left</span>
+                <strong>{timeRemainingLabel}</strong>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="actions-stack">
-          <form id="donate" className="action-box" onSubmit={(e) => { e.preventDefault(); contribute() }}>
-            <div>
-              <span className="eyebrow">Give</span>
-              <h3>Donate ETH</h3>
-              <p>Your reward is the chain recording that you helped.</p>
-            </div>
-            <Field label="Amount">
-              <input value={contribEth} onChange={(e) => setContribEth(e.target.value)} inputMode="decimal" />
-            </Field>
-            {!isConnected && (
-              <p className="form-note">Connect your wallet first. Then donate and receive precisely nothing.</p>
-            )}
-            {isConnected ? (
-              <button className="button primary" disabled={!campaignEnabled}>Donate Now. Get Nothing</button>
-            ) : (
-              <button className="button primary" type="button" onClick={() => connect({ connector: injected() })}>Connect to Donate</button>
-            )}
-          </form>
-
-          <form className="action-box" onSubmit={(e) => { e.preventDefault(); executeBuy() }}>
-            <div>
-              <span className="eyebrow">Got funds?</span>
-              <h3>Buy the Punk</h3>
-              <p>Anyone can execute the buy if a listed Punk fits the budget, balance, and max price.</p>
-            </div>
-            <Field label="Punk ID">
-              <input value={buyPunkId} onChange={(e) => setBuyPunkId(e.target.value)} inputMode="numeric" />
-            </Field>
-            <Field label="Max ETH">
-              <input value={buyMaxEth} onChange={(e) => setBuyMaxEth(e.target.value)} inputMode="decimal" />
-            </Field>
-            <button className="button secondary" disabled={!campaignEnabled}>Buy the Punk</button>
-          </form>
 
         </div>
+
+        <form id="donate" className="action-box donate-box" onSubmit={(e) => { e.preventDefault(); contribute() }}>
+          <div>
+            <span className="eyebrow">Make it real</span>
+            <h3>Send some ETH</h3>
+            <p>Keep this FundPunk dream alive.</p>
+          </div>
+          <Field label="Amount">
+            <input value={contribEth} onChange={(e) => setContribEth(e.target.value)} inputMode="decimal" />
+          </Field>
+          {!isConnected && (
+            <p className="form-note">Connect your wallet first. Then donate and receive precisely nothing.</p>
+          )}
+          {isConnected ? (
+            <button className="button primary" disabled={!campaignEnabled}>Fund This Punk</button>
+          ) : (
+            <button className="button primary" type="button" onClick={() => connect({ connector: injected() })}>Connect to Fund</button>
+          )}
+          <div className="address-list donation-meta">
+            <CampaignMetaRow label="Selected campaign" value={selectedCampaignAddr} />
+            <CampaignMetaRow label="Campaign creator wallet" value={creator.data} />
+            <CampaignMetaRow label="Original CryptoPunks market" value={market.data} />
+            <CampaignMetaRow label="Change goes to Protocol Guild" value={donation.data} />
+          </div>
+        </form>
+
+        <form className="settlement-box" onSubmit={(e) => { e.preventDefault(); executeBuy() }}>
+          <div>
+            <span className="eyebrow">Got funds?</span>
+            <h3>Buy the Punk</h3>
+            <p>Anyone can execute the buy if a listed Punk fits the budget, balance, and max price.</p>
+          </div>
+          <Field label="Punk ID">
+            <input value={buyPunkId} onChange={(e) => setBuyPunkId(e.target.value)} inputMode="numeric" />
+          </Field>
+          <Field label="Max ETH">
+            <input value={buyMaxEth} onChange={(e) => setBuyMaxEth(e.target.value)} inputMode="decimal" />
+          </Field>
+          <button className="button secondary" disabled={!campaignEnabled}>Buy the Punk</button>
+        </form>
       </section>
 
       <section id="factory" className="factory-section" aria-label="Factory">
@@ -499,39 +579,55 @@ function AppInner() {
       </details>
 
       <section id="faq" className="faq-section">
-        <div className="section-heading">
-          <span className="eyebrow">FAQ</span>
-          <h2>Questions worth asking before donating.</h2>
-        </div>
-        <div className="faq-grid">
-          <article className="faq-card-pink">
-            <h3>What do I get?</h3>
-            <p>Nothing. No token, no fraction, no governance, no claim on the Punk, no financial return. You get to be part of a very public experiment.</p>
-          </article>
-          <article>
-            <h3>Who gets the Punk?</h3>
-            <p>The campaign creator. The first campaign is from the creator of FundPunks, asking the internet to help buy a Punk and prove the donation-only thesis in public.</p>
-          </article>
-          <article className="faq-card-blue">
-            <h3>What happens to change?</h3>
-            <p>
-              If the Punk costs less than the ETH raised, the leftover ETH goes to{' '}
-              <a href="https://protocol-guild.readthedocs.io/" target="_blank" rel="noreferrer">Protocol Guild</a>.
-              If that donation fails, the whole buy reverts.
-            </p>
-          </article>
-          <article>
-            <h3>Is this audited?</h3>
-            <p>No. This is reckless, but you were gifting money anyway. If the contract is hacked, we can both treat it as an expensive lesson.</p>
-          </article>
-          <article>
-            <h3>Can I get a refund?</h3>
-            <p>Only if the creator cancels before purchase or no purchase succeeds by the execution deadline. Refunds go back to the contributor address, so use a wallet that can receive ETH.</p>
-          </article>
-          <article className="faq-card-yellow">
-            <h3>What is a campaign?</h3>
-            <p>A campaign is someone asking the crowd to help fund a Punk. The first campaign supports nuconomy.eth, creator of the contract. After that, absolutely anyone with gas fees and a dream can launch one.</p>
-          </article>
+        <div className="faq-layout">
+          <div className="section-heading">
+            <span className="eyebrow">FAQ</span>
+            <h2>Questions worth asking before donating.</h2>
+          </div>
+          <div className="faq-list">
+            <article>
+              <span>01</span>
+              <div>
+                <h3>What do I get?</h3>
+                <p>Nothing. No token, no fraction, no governance, no claim on the Punk, no financial return. You get to be part of a very public experiment.</p>
+              </div>
+            </article>
+            <article>
+              <span>02</span>
+              <div>
+                <h3>Who gets the Punk?</h3>
+                <p>The campaign creator. The first campaign is from the creator of FundPunks, asking the internet to help buy a Punk and prove the donation-only thesis in public.</p>
+              </div>
+            </article>
+            <article>
+              <span>03</span>
+              <div>
+                <h3>What is a campaign?</h3>
+                <p>A campaign is someone asking the crowd to help fund a Punk. The first campaign supports nuconomy.eth, creator of the contract. After that, absolutely anyone with gas fees and a dream can launch one.</p>
+              </div>
+            </article>
+            <article>
+              <span>04</span>
+              <div>
+                <h3>Can I get a refund?</h3>
+                <p>Only if the creator cancels before purchase or no purchase succeeds by the execution deadline. Refunds go back to the contributor address, so use a wallet that can receive ETH.</p>
+              </div>
+            </article>
+            <article>
+              <span>05</span>
+              <div>
+                <h3>Is this audited?</h3>
+                <p>No. This is reckless, but you were gifting money anyway. If the contract is hacked, we can both treat it as an expensive lesson.</p>
+              </div>
+            </article>
+            <article>
+              <span>06</span>
+              <div>
+                <h3>What happens to change?</h3>
+                <p>If the Punk costs less than the ETH raised, the leftover ETH goes to <a href="https://protocol-guild.readthedocs.io/" target="_blank" rel="noreferrer">Protocol Guild</a>. If that donation fails, the whole buy reverts.</p>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -547,18 +643,18 @@ function AppInner() {
           </p>
         </div>
         <div className="guild-points">
-          <article>
+          <div>
             <span>Why them?</span>
             <p>Protocol Guild supports Ethereum protocol contributors: the people maintaining the infrastructure this experiment depends on.</p>
-          </article>
-          <article>
+          </div>
+          <div>
             <span>Where does change go?</span>
             <p>To the hardcoded recipient <code>{PROTOCOL_GUILD_ADDRESS}</code>. Creator, executor, and frontend cannot edit it.</p>
-          </article>
-          <article>
+          </div>
+          <div>
             <span>Who picks the Punk?</span>
             <p>Whoever executes the buy chooses the listed Punk, as long as its price fits the campaign budget, tracked balance, and their max price.</p>
-          </article>
+          </div>
         </div>
       </section>
 
@@ -585,7 +681,7 @@ function AppInner() {
         <span>
           <a href="https://github.com/nuconomy/fundpunk" target="_blank" rel="noreferrer">GitHub</a>
         </span>
-        <span>No rights reserved. No upside implied.</span>
+        <span>&quot;CryptoPunks fund code.&quot; No rights reserved.</span>
       </footer>
     </main>
   )
