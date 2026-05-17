@@ -299,7 +299,7 @@ h1 {
 
 .thesis-band {
   width: min(100%, 840px);
-  margin: 14px auto 60px;
+  margin: 28px auto 44px;
   padding: 22px;
   background: #fff9fd;
   box-shadow: 4px 4px 0 rgba(234, 52, 176, 0.62);
@@ -729,16 +729,16 @@ code {
 .market-buy-box {
   grid-column: 1 / -1;
   display: grid;
-  gap: 18px;
+  gap: 14px;
   border-top: 2px solid var(--line);
-  padding-top: 22px;
+  padding-top: 20px;
 }
 
 .market-buy-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 20px;
 }
 
 .market-buy-heading h3 {
@@ -749,10 +749,11 @@ code {
 
 .market-buy-heading p,
 .target-punk-panel p {
-  max-width: 520px;
+  max-width: 640px;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .market-buy-box .button {
@@ -761,9 +762,9 @@ code {
 
 .market-buy-grid {
   display: grid;
-  grid-template-columns: minmax(168px, 0.28fr) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 16px;
+  grid-template-columns: minmax(252px, 0.34fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
 }
 
 .market-buy-grid.no-floor {
@@ -771,15 +772,14 @@ code {
 }
 
 .floor-punk-card {
-  min-height: 214px;
   display: grid;
-  grid-template-rows: 124px auto auto auto;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-items: center;
-  justify-items: start;
-  gap: 5px;
+  gap: 4px 12px;
   border: 2px solid var(--ink);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   color: var(--ink);
   background: var(--paper);
   box-shadow: 3px 3px 0 var(--ink);
@@ -794,9 +794,9 @@ code {
 }
 
 .floor-punk-card img {
-  width: 124px;
-  height: 124px;
-  justify-self: center;
+  grid-row: 1 / span 3;
+  width: 96px;
+  height: 96px;
   border: 2px solid var(--ink);
   background: #fff;
   image-rendering: pixelated;
@@ -805,11 +805,30 @@ code {
 
 .floor-punk-card span,
 .floor-punk-card small,
-.target-punk-panel span,
-.selection-note {
+.target-punk-panel span {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;
+}
+
+.market-floor {
+  min-width: 132px;
+  display: grid;
+  gap: 3px;
+  padding-top: 2px;
+  text-align: right;
+}
+
+.market-floor span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.market-floor strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.1;
 }
 
 .floor-punk-card strong {
@@ -820,10 +839,10 @@ code {
 
 .target-punk-panel {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   border: 2px solid var(--line);
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px;
   background: rgba(255, 249, 253, 0.68);
 }
 
@@ -840,35 +859,32 @@ code {
 
 .selection-note {
   border-top: 1px solid rgba(18, 16, 23, 0.12);
-  padding-top: 12px;
+  margin-top: 0;
+  padding-top: 10px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.selection-note strong {
+  color: var(--ink);
+  font-weight: 850;
 }
 
 .buy-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: 14px;
+  gap: 12px;
 }
 
-.market-floor {
-  min-width: 150px;
-  display: grid;
-  gap: 3px;
-  text-align: right;
-}
-
-.market-floor span,
 .market-card span,
 .market-card small {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 12px;
-}
-
-.market-floor strong {
-  color: var(--ink);
-  font-size: 18px;
-  line-height: 1.1;
 }
 
 .market-carousel {
@@ -1391,10 +1407,14 @@ code {
   }
 
   .progress-heading,
-  .progress-meter,
-  .market-buy-heading {
+  .progress-meter {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .market-buy-heading {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
   }
 
   .market-floor {

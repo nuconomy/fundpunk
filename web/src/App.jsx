@@ -602,8 +602,9 @@ function AppInner() {
           <div className="kicker">Permissionless finance at its finest</div>
           <h1>Now anyone can ask the internet for a Punk.</h1>
           <p className="lede">
-            FundPunks is fully onchain, donation-only crowdfunding for CryptoPunks. Anyone can launch a campaign; I&apos;m going first.
-            If a campaign hits its target, anyone can trigger the buy onchain, and any change goes to public goods.
+            FundPunks is a trustless fundraising protocol for buying CryptoPunks. Anyone can launch a campaign. Anyone can donate.
+            Once there&apos;s enough for a Punk, anyone can execute the buy onchain. The campaign creator gets the Punk. Public goods get any change.
+            If the target isn&apos;t reached, contributors can claim a refund.
           </p>
           <div className="hero-actions">
             <a className="button primary" href="#donate">Donate to the first campaign</a>
@@ -619,24 +620,6 @@ function AppInner() {
               <strong>State of being before the first FundPunk hits.</strong>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="thesis-band" aria-label="Project thesis">
-        <div>
-          <span className="eyebrow">Why this exists</span>
-          <blockquote>
-            <p>
-              Recently I saw someone had raised over 33 ETH from 836 strangers to crowdfund a CryptoPunk. It was novel, it was onchain, but it still took a full day for the creator to actually buy the Punk.
-            </p>
-            <p>
-              So I created an onchain way for anyone to crowdfund a CryptoPunk and as soon as the target balance is achieved anyone can force trigger the buy with any change going to public goods.
-            </p>
-          </blockquote>
-          <span className="quote-credit">
-            - <a href="https://x.com/nuconomy" target="_blank" rel="noreferrer">@nuconomy.eth</a>, on Farcaster after seeing{' '}
-            <a href="https://buymeapunk.xyz/" target="_blank" rel="noreferrer">Buy Me A Punk</a>
-          </span>
         </div>
       </section>
 
@@ -766,7 +749,7 @@ function AppInner() {
             <div>
               <span className="eyebrow">Live market</span>
               <h3>Choose the Punk to buy.</h3>
-              <p>Default to the floor to send more change to Protocol Guild, or pick any verified public listing inside the campaign target.</p>
+              <p>Choose the floor to preserve more change, or pick any verified public listing that fits the campaign target.</p>
             </div>
             <div className="market-floor">
               <span>Verified floor</span>
@@ -867,13 +850,15 @@ function AppInner() {
 
               {selectedListing ? (
                 <p className={`selection-note ${selectedBuyUnavailable ? 'warning-note' : ''}`}>
-                  {!selectedFundingKnown
-                    ? `Checking campaign funds for Punk #${selectedListing.punkId}.`
-                    : selectedAboveBudget
-                      ? `Punk #${selectedListing.punkId} is above this campaign target. Estimated Protocol Guild donation: 0 ETH.`
-                      : selectedFundsShortfall > 0n
-                        ? `Punk #${selectedListing.punkId} needs ${formatEth(selectedFundsShortfall)} more before purchase. Estimated Protocol Guild donation: 0 ETH.`
-                        : `Punk #${selectedListing.punkId} would send about ${formatEth(selectedProtocolDonationWei)} to Protocol Guild after purchase.`}
+                  {!selectedFundingKnown ? (
+                    <>Checking campaign funds for Punk #{selectedListing.punkId}.</>
+                  ) : selectedAboveBudget ? (
+                    <>Punk #{selectedListing.punkId} is above this campaign target. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                  ) : selectedFundsShortfall > 0n ? (
+                    <>Punk #{selectedListing.punkId} needs <strong>{formatEth(selectedFundsShortfall)}</strong> more before purchase. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                  ) : (
+                    <>Estimated Protocol Guild donation after purchase: <strong>{formatEth(selectedProtocolDonationWei)}</strong>.</>
+                  )}
                 </p>
               ) : (
                 <p className="selection-note">Enter a Punk ID and max ETH, or choose a verified listing above.</p>
@@ -1013,6 +998,24 @@ function AppInner() {
             <span>Who picks the Punk?</span>
             <p>Whoever executes the buy chooses the listed Punk, as long as its price fits the campaign budget, tracked balance, and their max price.</p>
           </div>
+        </div>
+      </section>
+
+      <section className="thesis-band" aria-label="Project thesis">
+        <div>
+          <span className="eyebrow">Why this exists</span>
+          <blockquote>
+            <p>
+              Recently I saw someone had raised over 33 ETH from 836 strangers to crowdfund a CryptoPunk. It was novel, it was onchain, but it still took a full day for the creator to actually buy the Punk.
+            </p>
+            <p>
+              So I created an onchain way for anyone to crowdfund a CryptoPunk and as soon as the target balance is achieved anyone can force trigger the buy with any change going to public goods.
+            </p>
+          </blockquote>
+          <span className="quote-credit">
+            - <a href="https://x.com/nuconomy" target="_blank" rel="noreferrer">@nuconomy.eth</a>, on Farcaster after seeing{' '}
+            <a href="https://buymeapunk.xyz/" target="_blank" rel="noreferrer">Buy Me A Punk</a>
+          </span>
         </div>
       </section>
 
