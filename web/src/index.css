@@ -726,31 +726,202 @@ code {
   gap: 16px;
 }
 
-.settlement-box {
+.market-buy-box {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.38fr) minmax(120px, 0.38fr) minmax(150px, auto);
-  align-items: end;
-  gap: 16px;
+  gap: 18px;
   border-top: 2px solid var(--line);
   padding-top: 22px;
 }
 
-.settlement-box h3 {
+.market-buy-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.market-buy-heading h3 {
   color: var(--ink);
   font-size: 22px;
   line-height: 1.15;
 }
 
-.settlement-box p {
+.market-buy-heading p,
+.target-punk-panel p {
   max-width: 520px;
   margin-top: 4px;
   color: var(--muted);
   font-size: 15px;
 }
 
-.settlement-box .button {
+.market-buy-box .button {
   width: 100%;
+}
+
+.market-buy-grid {
+  display: grid;
+  grid-template-columns: minmax(168px, 0.28fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+}
+
+.market-buy-grid.no-floor {
+  grid-template-columns: 1fr;
+}
+
+.floor-punk-card {
+  min-height: 214px;
+  display: grid;
+  grid-template-rows: 124px auto auto auto;
+  align-items: center;
+  justify-items: start;
+  gap: 5px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 3px 3px 0 var(--ink);
+  text-align: left;
+}
+
+.floor-punk-card:hover,
+.floor-punk-card.selected,
+.market-card.selected {
+  box-shadow: 2px 2px 0 var(--pink);
+  transform: translate(1px, 1px);
+}
+
+.floor-punk-card img {
+  width: 124px;
+  height: 124px;
+  justify-self: center;
+  border: 2px solid var(--ink);
+  background: #fff;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.floor-punk-card span,
+.floor-punk-card small,
+.target-punk-panel span,
+.selection-note {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.floor-punk-card strong {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.target-punk-panel {
+  display: grid;
+  gap: 16px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255, 249, 253, 0.68);
+}
+
+.target-punk-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.target-punk-panel span {
+  color: var(--pink);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.selection-note {
+  border-top: 1px solid rgba(18, 16, 23, 0.12);
+  padding-top: 12px;
+}
+
+.buy-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 14px;
+}
+
+.market-floor {
+  min-width: 150px;
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.market-floor span,
+.market-card span,
+.market-card small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.market-floor strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.market-carousel {
+  display: grid;
+  grid-auto-columns: minmax(132px, 150px);
+  grid-auto-flow: column;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  scroll-snap-type: x proximity;
+}
+
+.market-card {
+  min-height: 208px;
+  display: grid;
+  grid-template-rows: 98px auto auto auto;
+  align-items: center;
+  justify-items: start;
+  gap: 6px;
+  scroll-snap-align: start;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 3px 3px 0 var(--ink);
+  text-align: left;
+}
+
+.market-card:hover {
+  box-shadow: 2px 2px 0 var(--pink);
+  transform: translate(1px, 1px);
+}
+
+.market-card img {
+  width: 98px;
+  height: 98px;
+  justify-self: center;
+  border: 2px solid var(--ink);
+  background: #fff;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.market-card strong {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.market-card small {
+  color: var(--pink);
+  font-weight: 850;
 }
 
 .action-box h3,
@@ -1096,7 +1267,8 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .settlement-box {
+  .market-buy-grid,
+  .buy-fields {
     grid-template-columns: 1fr;
   }
 
@@ -1219,9 +1391,14 @@ code {
   }
 
   .progress-heading,
-  .progress-meter {
+  .progress-meter,
+  .market-buy-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .market-floor {
+    text-align: left;
   }
 
   .progress-meter > strong {

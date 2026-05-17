@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createConfig, http, useAccount, useConnect, useDisconnect, useEnsName, useReadContract, useWriteContract } from 'wagmi'
+import { createConfig, http, useAccount, useBalance, useConnect, useDisconnect, useEnsName, useReadContract, useReadContracts, useWriteContract } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 import { WagmiProvider } from 'wagmi'
@@ -12,6 +12,9 @@ const FACTORY_ADDRESS = import.meta.env.VITE_FACTORY_ADDRESS || ZERO_ADDRESS
 const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
 const FEATURED_CAMPAIGN_ADDRESS = import.meta.env.VITE_FEATURED_CAMPAIGN_ADDRESS || ''
 const SUGGESTED_CAMPAIGN_ADDRESSES = import.meta.env.VITE_SUGGESTED_CAMPAIGN_ADDRESSES || ''
+const MARKET_WORKER_URL = (import.meta.env.VITE_CRYPTOPUNKS_MARKET_WORKER_URL || '').trim()
+const MARKET_CANDIDATE_LIMIT = 48
+const CRYPTOPUNKS_MARKET_ADDRESS = '0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB'
 const PROTOCOL_GUILD_ADDRESS = '0x25941dC771bB64514Fc8abBce970307Fb9d477e9'
 const hasReadTransport = Boolean(MAINNET_RPC_URL)
 
@@ -53,6 +56,22 @@ const campaignAbi = [
   { inputs: [], name: 'donateSurplus', outputs: [], stateMutability: 'nonpayable', type: 'function' },
 ]
 
+const cryptopunksMarketAbi = [
+  {
+    inputs: [{ name: 'punkIndex', type: 'uint256' }],
+    name: 'punksOfferedForSale',
+    outputs: [
+      { name: 'isForSale', type: 'bool' },
+      { name: 'punkIndex', type: 'uint256' },
+      { name: 'seller', type: 'address' },
+      { name: 'minValue', type: 'uint256' },
+      { name: 'onlySellTo', type: 'address' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+]
+
 const config = createConfig({
   chains: [mainnet],
   connectors: [injected()],
@@ -73,9 +92,79 @@ function isAddress(value) {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function normalizePunkId(value) {
+  const id = Number(value)
+  return Number.isInteger(id) && id >= 0 && id <= 9999 ? id : undefined
+}
+
+function candidatePunkId(value) {
+  if (value && typeof value === 'object') {
+    return normalizePunkId(value.punkId ?? value.punkIndex ?? value.index ?? value.id)
+  }
+
+  return normalizePunkId(value)
+}
+
+function dedupePunkIds(values) {
+  const seen = new Set()
+  const ids = []
+
+  for (const value of values) {
+    const id = candidatePunkId(value)
+    if (id === undefined || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+
+  return ids
+}
+
+function normalizeMarketIndex(payload) {
+  const data = payload?.data && !Array.isArray(payload.data) && typeof payload.data === 'object' ? payload.data : payload
+  const rawCandidates = Array.isArray(data?.candidates)
+    ? data.candidates
+    : Array.isArray(data?.listings)
+      ? data.listings
+      : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data)
+          ? data
+          : []
+  const rawOfferedIds = Array.isArray(data?.offeredIds) ? data.offeredIds : []
+  const candidateIds = dedupePunkIds(rawCandidates)
+  const offeredIds = dedupePunkIds(rawOfferedIds)
+  const fallbackCandidateIds = candidateIds.length > 0 ? candidateIds : offeredIds
+
+  return {
+    candidateIds: fallbackCandidateIds.slice(0, MARKET_CANDIDATE_LIMIT),
+    fetchedAt: typeof data?.fetchedAt === 'string' ? data.fetchedAt : '',
+    offeredCount: Number(data?.offeredCount ?? offeredIds.length),
+  }
+}
+
+function getOfferTuple(readResult) {
+  if (!readResult) return undefined
+  if (readResult.status && readResult.status !== 'success') return undefined
+
+  const result = typeof readResult === 'object' && 'result' in readResult ? readResult.result : readResult
+  return Array.isArray(result) ? result : undefined
+}
+
 function formatEth(value) {
   if (value === undefined) return '...'
   return `${Number(formatEther(value)).toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH`
+}
+
+function formatEthInput(value) {
+  return formatEther(value).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
+}
+
+function suggestedTargetFromFloor(value) {
+  const floorEth = Number(formatEther(value))
+  if (!Number.isFinite(floorEth) || floorEth <= 0) return ''
+
+  const suggestedEth = Math.ceil(floorEth * 1.1 * 10) / 10
+  return suggestedEth.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 }
 
 function shortAddress(value) {
@@ -144,17 +233,73 @@ function getInitialCampaignAddress() {
 function AppInner() {
   const [campaignAddr, setCampaignAddr] = useState(getInitialCampaignAddress)
   const [budgetEth, setBudgetEth] = useState('31')
+  const [budgetEdited, setBudgetEdited] = useState(false)
   const [fundDays, setFundDays] = useState('30')
   const [execDays, setExecDays] = useState('30')
 
   const [contribEth, setContribEth] = useState('0.1')
   const [buyPunkId, setBuyPunkId] = useState('')
   const [buyMaxEth, setBuyMaxEth] = useState('31')
+  const [buyFormEdited, setBuyFormEdited] = useState(false)
   const [nowMs, setNowMs] = useState(() => Date.now())
+  const [marketIndex, setMarketIndex] = useState(() => ({
+    status: MARKET_WORKER_URL ? 'loading' : 'disabled',
+    data: null,
+    error: '',
+  }))
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60000)
     return () => window.clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (!MARKET_WORKER_URL) {
+      setMarketIndex({ status: 'disabled', data: null, error: '' })
+      return undefined
+    }
+
+    let cancelled = false
+    let intervalId
+
+    async function loadMarketIndex() {
+      setMarketIndex((current) => ({
+        ...current,
+        status: current.data ? 'refreshing' : 'loading',
+        error: '',
+      }))
+
+      try {
+        const url = new URL(MARKET_WORKER_URL)
+        url.searchParams.set('limit', String(MARKET_CANDIDATE_LIMIT))
+
+        const response = await fetch(url, { headers: { Accept: 'application/json' } })
+        if (!response.ok) throw new Error(`Market worker returned ${response.status}`)
+
+        const payload = await response.json()
+        const normalized = normalizeMarketIndex(payload)
+
+        if (!cancelled) {
+          setMarketIndex({ status: 'ready', data: normalized, error: '' })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMarketIndex((current) => ({
+            ...current,
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Market index failed',
+          }))
+        }
+      }
+    }
+
+    loadMarketIndex()
+    intervalId = window.setInterval(loadMarketIndex, 120000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
   }, [])
 
   const { address, isConnected } = useAccount()
@@ -231,6 +376,87 @@ function AppInner() {
   })
   const market = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'cryptopunksMarket', query: { enabled: campaignReadEnabled } })
   const donation = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'donationRecipient', query: { enabled: campaignReadEnabled } })
+  const campaignBalance = useBalance({
+    address: selectedCampaignAddr,
+    chainId: mainnet.id,
+    query: { enabled: campaignReadEnabled },
+  })
+  const marketCandidateIds = useMemo(() => marketIndex.data?.candidateIds || [], [marketIndex.data])
+  const marketReadContracts = useMemo(() => (
+    marketCandidateIds.map((punkId) => ({
+      address: CRYPTOPUNKS_MARKET_ADDRESS,
+      abi: cryptopunksMarketAbi,
+      functionName: 'punksOfferedForSale',
+      args: [BigInt(punkId)],
+    }))
+  ), [marketCandidateIds])
+  const offerReads = useReadContracts({
+    allowFailure: true,
+    contracts: marketReadContracts,
+    query: {
+      enabled: hasReadTransport && marketReadContracts.length > 0,
+      refetchInterval: 60000,
+    },
+  })
+  const verifiedPublicListings = useMemo(() => {
+    const listings = []
+
+    marketCandidateIds.forEach((punkId, index) => {
+      const tuple = getOfferTuple(offerReads.data?.[index])
+      if (!tuple) return
+
+      const [isForSale, punkIndexOut, seller, minValue, onlySellTo] = tuple
+      const verifiedPunkId = Number(punkIndexOut ?? punkId)
+      const minValueWei = minValue === undefined || minValue === null ? 0n : BigInt(minValue)
+      const sellTo = String(onlySellTo || ZERO_ADDRESS).toLowerCase()
+
+      if (
+        !isForSale ||
+        verifiedPunkId !== punkId ||
+        minValueWei <= 0n ||
+        sellTo !== ZERO_ADDRESS
+      ) {
+        return
+      }
+
+      listings.push({ punkId, seller, minValue: minValueWei })
+    })
+
+    return listings.sort((a, b) => a.minValue < b.minValue ? -1 : a.minValue > b.minValue ? 1 : a.punkId - b.punkId)
+  }, [marketCandidateIds, offerReads.data])
+  const verifiedFloorListing = verifiedPublicListings[0]
+  const affordableListings = useMemo(() => {
+    if (!budget.data) return []
+    return verifiedPublicListings.filter((listing) => listing.minValue <= budget.data).slice(0, 12)
+  }, [budget.data, verifiedPublicListings])
+  const selectedPunkId = normalizePunkId(buyPunkId)
+  const selectedListing = useMemo(
+    () => verifiedPublicListings.find((listing) => listing.punkId === selectedPunkId),
+    [selectedPunkId, verifiedPublicListings],
+  )
+  const selectedFundingKnown = selectedListing
+    ? campaignBalance.data?.value !== undefined && raised.data !== undefined && budget.data !== undefined
+    : true
+  const campaignSpendableWei = campaignBalance.data?.value !== undefined && raised.data !== undefined
+    ? (campaignBalance.data.value < raised.data ? campaignBalance.data.value : raised.data)
+    : undefined
+  const selectedAboveBudget = Boolean(
+    selectedListing && budget.data !== undefined && selectedListing.minValue > budget.data,
+  )
+  const selectedFundsShortfall = selectedListing && campaignSpendableWei !== undefined && campaignSpendableWei < selectedListing.minValue
+    ? selectedListing.minValue - campaignSpendableWei
+    : 0n
+  const selectedBuyUnavailable = Boolean(
+    selectedListing && (!selectedFundingKnown || selectedAboveBudget || selectedFundsShortfall > 0n),
+  )
+  const selectedProtocolDonationWei = selectedListing &&
+    selectedFundingKnown &&
+    !selectedAboveBudget &&
+    selectedFundsShortfall === 0n &&
+    campaignBalance.data.value > selectedListing.minValue
+    ? campaignBalance.data.value - selectedListing.minValue
+    : 0n
+  const buyButtonDisabled = !campaignEnabled || selectedBuyUnavailable
   const progressPct = budget.data && budget.data > 0n && raised.data !== undefined
     ? Math.min(100, Number((raised.data * 10000n) / budget.data) / 100)
     : 0
@@ -281,6 +507,25 @@ function AppInner() {
     : creatorDisplayLabel
       ? `You are viewing a factory-created FundPunks campaign launched by ${creatorDisplayLabel}. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.`
       : 'You are viewing a factory-created FundPunks campaign. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.'
+
+  useEffect(() => {
+    if (!verifiedFloorListing || buyFormEdited) return
+
+    setBuyPunkId(String(verifiedFloorListing.punkId))
+    setBuyMaxEth(formatEthInput(verifiedFloorListing.minValue))
+  }, [buyFormEdited, verifiedFloorListing])
+
+  useEffect(() => {
+    if (!verifiedFloorListing || budgetEdited) return
+
+    setBudgetEth(suggestedTargetFromFloor(verifiedFloorListing.minValue))
+  }, [budgetEdited, verifiedFloorListing])
+
+  function fillBuyFormFromListing(listing) {
+    setBuyFormEdited(true)
+    setBuyPunkId(String(listing.punkId))
+    setBuyMaxEth(formatEthInput(listing.minValue))
+  }
 
   async function createCampaign() {
     const now = Math.floor(Date.now() / 1000)
@@ -516,19 +761,125 @@ function AppInner() {
           </div>
         </form>
 
-        <form className="settlement-box" onSubmit={(e) => { e.preventDefault(); executeBuy() }}>
-          <div>
-            <span className="eyebrow">Got funds?</span>
-            <h3>Buy the Punk</h3>
-            <p>Anyone can execute the buy if a listed Punk fits the budget, balance, and max price.</p>
+        <form className="market-buy-box" onSubmit={(e) => { e.preventDefault(); executeBuy() }}>
+          <div className="market-buy-heading">
+            <div>
+              <span className="eyebrow">Live market</span>
+              <h3>Choose the Punk to buy.</h3>
+              <p>Default to the floor to send more change to Protocol Guild, or pick any verified public listing inside the campaign target.</p>
+            </div>
+            <div className="market-floor">
+              <span>Verified floor</span>
+              <strong>{verifiedFloorListing ? formatEth(verifiedFloorListing.minValue) : '...'}</strong>
+            </div>
           </div>
-          <Field label="Punk ID">
-            <input value={buyPunkId} onChange={(e) => setBuyPunkId(e.target.value)} inputMode="numeric" />
-          </Field>
-          <Field label="Max ETH">
-            <input value={buyMaxEth} onChange={(e) => setBuyMaxEth(e.target.value)} inputMode="decimal" />
-          </Field>
-          <button className="button secondary" disabled={!campaignEnabled}>Buy the Punk</button>
+
+          <div className={`market-buy-grid ${verifiedFloorListing ? '' : 'no-floor'}`}>
+            {verifiedFloorListing && (
+              <button
+                className={`floor-punk-card ${selectedListing?.punkId === verifiedFloorListing.punkId ? 'selected' : ''}`}
+                type="button"
+                onClick={() => fillBuyFormFromListing(verifiedFloorListing)}
+                aria-label={`Use floor Punk ${verifiedFloorListing.punkId}`}
+              >
+                <img
+                  src={`https://www.cryptopunks.app/api/punks/${verifiedFloorListing.punkId}/image`}
+                  alt={`CryptoPunk #${verifiedFloorListing.punkId}`}
+                  loading="eager"
+                />
+                <span>Default floor</span>
+                <strong>#{verifiedFloorListing.punkId}</strong>
+                <small>{formatEth(verifiedFloorListing.minValue)}</small>
+              </button>
+            )}
+
+            <div className="target-punk-panel">
+              <div className="target-punk-heading">
+                <span>Inside campaign target</span>
+                <p>These listings are verified public offers at or below the selected campaign target.</p>
+              </div>
+
+              {marketIndex.status === 'disabled' ? (
+                <p className="form-note">Set VITE_CRYPTOPUNKS_MARKET_WORKER_URL to enable live listing suggestions.</p>
+              ) : marketIndex.status === 'loading' || (marketReadContracts.length > 0 && !offerReads.data && offerReads.isFetching) ? (
+                <p className="form-note">Loading live market candidates and verifying listings onchain...</p>
+              ) : marketIndex.status === 'error' && !marketIndex.data ? (
+                <p className="form-note warning-note">Live listings are unavailable.</p>
+              ) : offerReads.isError ? (
+                <p className="form-note warning-note">Live listing verification is unavailable.</p>
+              ) : affordableListings.length > 0 ? (
+                <div className="market-carousel" aria-label="Verified affordable listings">
+                  {affordableListings.map((listing) => (
+                    <button
+                      key={listing.punkId}
+                      className={`market-card ${selectedListing?.punkId === listing.punkId ? 'selected' : ''}`}
+                      type="button"
+                      onClick={() => fillBuyFormFromListing(listing)}
+                    >
+                      <img
+                        src={`https://www.cryptopunks.app/api/punks/${listing.punkId}/image`}
+                        alt={`CryptoPunk #${listing.punkId}`}
+                        loading="lazy"
+                      />
+                      <span>#{listing.punkId}</span>
+                      <strong>{formatEth(listing.minValue)}</strong>
+                      <small>Fill buy form</small>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="form-note">
+                  {budget.data
+                    ? 'No verified public listings fit this campaign target right now.'
+                    : 'Verified listings load against the selected campaign target.'}
+                </p>
+              )}
+
+              <div className="buy-fields">
+                <Field label="Punk ID">
+                  <input
+                    value={buyPunkId}
+                    onChange={(e) => {
+                      setBuyFormEdited(true)
+                      setBuyPunkId(e.target.value)
+                    }}
+                    inputMode="numeric"
+                  />
+                </Field>
+                <Field label="Max ETH">
+                  <input
+                    value={buyMaxEth}
+                    onChange={(e) => {
+                      setBuyFormEdited(true)
+                      setBuyMaxEth(e.target.value)
+                    }}
+                    inputMode="decimal"
+                  />
+                </Field>
+                <button
+                  className="button secondary"
+                  disabled={buyButtonDisabled}
+                  title={selectedBuyUnavailable ? 'Campaign funds or target are below the selected listing.' : undefined}
+                >
+                  Buy the Punk
+                </button>
+              </div>
+
+              {selectedListing ? (
+                <p className={`selection-note ${selectedBuyUnavailable ? 'warning-note' : ''}`}>
+                  {!selectedFundingKnown
+                    ? `Checking campaign funds for Punk #${selectedListing.punkId}.`
+                    : selectedAboveBudget
+                      ? `Punk #${selectedListing.punkId} is above this campaign target. Estimated Protocol Guild donation: 0 ETH.`
+                      : selectedFundsShortfall > 0n
+                        ? `Punk #${selectedListing.punkId} needs ${formatEth(selectedFundsShortfall)} more before purchase. Estimated Protocol Guild donation: 0 ETH.`
+                        : `Punk #${selectedListing.punkId} would send about ${formatEth(selectedProtocolDonationWei)} to Protocol Guild after purchase.`}
+                </p>
+              ) : (
+                <p className="selection-note">Enter a Punk ID and max ETH, or choose a verified listing above.</p>
+              )}
+            </div>
+          </div>
         </form>
       </section>
 
@@ -542,7 +893,14 @@ function AppInner() {
         </div>
         <form className="factory-form" onSubmit={(e) => { e.preventDefault(); createCampaign() }}>
           <Field label="Purchase budget ETH">
-            <input value={budgetEth} onChange={(e) => setBudgetEth(e.target.value)} inputMode="decimal" />
+            <input
+              value={budgetEth}
+              onChange={(e) => {
+                setBudgetEdited(true)
+                setBudgetEth(e.target.value)
+              }}
+              inputMode="decimal"
+            />
           </Field>
           <Field label="Funding window days">
             <input value={fundDays} onChange={(e) => setFundDays(e.target.value)} inputMode="numeric" />
