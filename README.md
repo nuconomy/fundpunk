@@ -1,4 +1,4 @@
-# FundPunk V1
+# FundPunk
 
 FundPunk is the contract system. FundPunks is the public website for donation-based crowdfunding campaigns to buy original CryptoPunks through the original CryptoPunks marketplace contract.
 
@@ -46,6 +46,45 @@ Current known limitations:
 
 - The frontend reads `VITE_FACTORY_ADDRESS`; set it to the deployed factory address before building the static site.
 - The project targets the original hardcoded CryptoPunks marketplace, not OpenSea or Seaport.
+
+## V1 Punks Directed Campaigns
+
+This branch adds a separate V1 campaign system for the broken June 9th 2017 CryptoPunks contract. It does not replace the existing FundPunk factory or campaign contracts.
+
+- `contracts/FundV1PunkFactory.sol`: deploys V1 campaign contracts and tracks created campaigns.
+- `contracts/FundV1PunkCampaign.sol`: accepts contributions, buys only V1 listings directed to PunksMarket, sends the bought V1 Punk to the campaign creator, handles refunds, and donates purchase surplus to Protocol Guild.
+
+V1 campaigns hardcode two addresses:
+
+- `0x6Ba6f2207e343923BA692e5Cae646Fb0F566DB8D`: the original broken CryptoPunks V1 contract. This contract holds the Punk ownership mapping and the original sale/listing functions.
+- `0x64e507FEBF26521b73FbdfA533106B2042533218`: the PunksMarket adapter that safely settles directed V1 listings.
+
+Sellers must list through the original V1 contract with `offerPunkForSaleToAddress(punkId, price, 0x64e507FEBF26521b73FbdfA533106B2042533218)`. Public V1 listings are intentionally rejected.
+
+For more context on why directed listings are required and how PunksMarket settles them safely, see [punksmarket.app/about](https://punksmarket.app/about).
+
+Run the V1 unit tests with the regular contract test command:
+
+```bash
+npx hardhat test
+```
+
+Run a local mainnet-fork rehearsal against a real directed V1 listing:
+
+```bash
+npx hardhat node --fork "$MAINNET_RPC_URL"
+```
+
+In another terminal:
+
+```bash
+PUNK_ID=1234 \
+MAX_PRICE_ETH=10 \
+PURCHASE_BUDGET_ETH=10 \
+npx hardhat run scripts/fork-v1-rehearsal.cjs --network localhost
+```
+
+The rehearsal deploys a local V1 factory and campaign on the fork, verifies the selected V1 listing is directed to PunksMarket, contributes fork ETH, executes the campaign buy through PunksMarket, verifies the creator receives the Punk, verifies campaign balance is zero, and verifies leftover ETH is sent to Protocol Guild.
 
 ## Contracts
 
