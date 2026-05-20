@@ -1,4 +1,4 @@
-# FundPunk V1
+# FundPunk
 
 FundPunk is the contract system. FundPunks is the public website for donation-based crowdfunding campaigns to buy original CryptoPunks through the original CryptoPunks marketplace contract.
 
@@ -36,6 +36,14 @@ First mainnet campaign:
 
 `0xF6AB3893d5C397d53ef37E18b135d6a2d8b0c1AE`
 
+Deployed CryptoPunks V1 mainnet factory:
+
+`0x502424cce237e11af4b276805b67e777caa4706f`
+
+First CryptoPunks V1 mainnet campaign:
+
+`0xfd4fc93dc9a9ef389b83a9690c7a524757295d14`
+
 The factory architecture means anyone can create a campaign for a Punk forever, without needing the original creator's permission. The first campaign is personal; the mechanism is public.
 
 ## Status
@@ -44,8 +52,47 @@ This project is not production ready and has not been professionally audited. Do
 
 Current known limitations:
 
-- The frontend reads `VITE_FACTORY_ADDRESS`; set it to the deployed factory address before building the static site.
+- The frontend reads `VITE_FACTORY_ADDRESS` for regular CryptoPunks campaigns and `VITE_V1_FACTORY_ADDRESS` for CryptoPunks V1 campaigns; set deployed factory addresses before building the static site.
 - The project targets the original hardcoded CryptoPunks marketplace, not OpenSea or Seaport.
+
+## CryptoPunks V1 PunksMarket Campaigns
+
+This branch adds a separate V1 campaign system for the broken June 9th 2017 CryptoPunks contract. It does not replace the existing FundPunk factory or campaign contracts.
+
+- `contracts/FundV1PunkFactory.sol`: deploys V1 campaign contracts and tracks created campaigns.
+- `contracts/FundV1PunkCampaign.sol`: accepts contributions, buys only CryptoPunks V1 PunksMarket Listings, sends the bought V1 Punk to the campaign creator, handles refunds, and donates purchase surplus to Protocol Guild.
+
+V1 campaigns hardcode two addresses:
+
+- `0x6Ba6f2207e343923BA692e5Cae646Fb0F566DB8D`: the original broken CryptoPunks V1 contract. This contract holds the Punk ownership mapping and the original sale/listing functions.
+- `0x64e507FEBF26521b73FbdfA533106B2042533218`: the PunksMarket adapter that safely settles PunksMarket-compatible V1 listings.
+
+Sellers must list through the original V1 contract with `offerPunkForSaleToAddress(punkId, price, 0x64e507FEBF26521b73FbdfA533106B2042533218)`. Public V1 listings are intentionally rejected.
+
+For more context on why PunksMarket-compatible listings are required and how PunksMarket settles them safely, see [punksmarket.app/about](https://punksmarket.app/about).
+
+Run the V1 unit tests with the regular contract test command:
+
+```bash
+npx hardhat test
+```
+
+Run a local mainnet-fork rehearsal against a real CryptoPunks V1 PunksMarket Listing:
+
+```bash
+npx hardhat node --fork "$MAINNET_RPC_URL"
+```
+
+In another terminal:
+
+```bash
+PUNK_ID=1234 \
+MAX_PRICE_ETH=10 \
+PURCHASE_BUDGET_ETH=10 \
+npx hardhat run scripts/fork-v1-rehearsal.cjs --network localhost
+```
+
+The rehearsal deploys a local V1 factory and campaign on the fork, verifies the selected V1 listing is a PunksMarket listing, contributes fork ETH, executes the campaign buy through PunksMarket, verifies the creator receives the Punk, verifies campaign balance is zero, and verifies leftover ETH is sent to Protocol Guild.
 
 ## Contracts
 
@@ -59,18 +106,23 @@ The FundPunks web app is a Vite React interface in `web/`.
 
 It lets users:
 
+- switch between regular CryptoPunks campaigns and CryptoPunks V1 campaigns,
 - create campaigns,
 - contribute ETH,
 - auto-load the first campaign launched by the factory as the featured campaign,
 - select later factory campaigns as suggested campaigns,
 - paste or directly link to a factory-created campaign,
-- browse a small live CryptoPunks market carousel sourced from an untrusted Worker and verified against the marketplace contract,
+- browse a small live listing carousel sourced from an untrusted Worker and verified against the relevant CryptoPunks contract,
 - attempt a permissionless Punk purchase, and
 - claim refunds after creator cancellation or execution expiry if no purchase succeeds.
 
 Campaign deep links use the query string form:
 
 `https://fundpunks.eth.limo/?campaign=0x...`
+
+CryptoPunks V1 campaign deep links can include the V1 mode:
+
+`https://fundpunks.eth.limo/?mode=v1&campaign=0x...`
 
 The frontend only enables campaign actions for addresses listed by the configured FundPunk factory, so a deep link cannot turn the site into a donation page for an arbitrary contract.
 
@@ -94,27 +146,35 @@ Set `web/.env` before building the static site:
 VITE_FACTORY_ADDRESS=0x95d75D46A32C865CCdfa04490b0A9619bFBA9067
 VITE_FEATURED_CAMPAIGN_ADDRESS=0xF6AB3893d5C397d53ef37E18b135d6a2d8b0c1AE
 VITE_SUGGESTED_CAMPAIGN_ADDRESSES=
+VITE_V1_FACTORY_ADDRESS=0x502424cce237e11af4b276805b67e777caa4706f
+VITE_V1_FEATURED_CAMPAIGN_ADDRESS=0xfd4fc93dc9a9ef389b83a9690c7a524757295d14
+VITE_V1_SUGGESTED_CAMPAIGN_ADDRESSES=
 VITE_MAINNET_RPC_URL=https://ethereum-rpc.publicnode.com
 VITE_CRYPTOPUNKS_MARKET_WORKER_URL=https://fundpunks.nuconomy.workers.dev/market
+VITE_V1_PUNKSMARKET_WORKER_URL=https://fundpunks-v1-punksmarket.nuconomy.workers.dev/market
 ```
 
-`VITE_FEATURED_CAMPAIGN_ADDRESS` can be set to the first campaign so the static site can show it immediately even before reading the factory. `VITE_SUGGESTED_CAMPAIGN_ADDRESSES` is an optional comma-separated list.
+`VITE_FEATURED_CAMPAIGN_ADDRESS` and `VITE_V1_FEATURED_CAMPAIGN_ADDRESS` can be set to the first campaign for each mode so the static site can show it immediately even before reading the factory. `VITE_SUGGESTED_CAMPAIGN_ADDRESSES` and `VITE_V1_SUGGESTED_CAMPAIGN_ADDRESSES` are optional comma-separated lists.
 
 `VITE_MAINNET_RPC_URL` is a browser-visible read-only RPC endpoint used for logged-out campaign stats. It is not treated as a secret. Transactions still go through the user's injected wallet. If a gateway or host blocks external RPC requests with Content Security Policy, the site can still show baked campaign addresses, but live balances/state require a host with an allowed `connect-src` policy or a small server-side proxy.
 
 `VITE_CRYPTOPUNKS_MARKET_WORKER_URL` is optional. When set, the frontend asks a tiny Cloudflare Worker for current offered Punk candidates, then verifies every displayed listing with `punksOfferedForSale(punkId)` on the original CryptoPunks marketplace. If the Worker or RPC verification fails, the manual target and Punk ID inputs remain available.
 
-Deploy the optional market Worker:
+`VITE_V1_PUNKSMARKET_WORKER_URL` is optional. When set, the frontend asks the V1 Worker for CryptoPunks V1 PunksMarket Listing candidates, then verifies every displayed listing with `punksOfferedForSale(punkId)` and `punkIndexToAddress(punkId)` on the original V1 CryptoPunks contract. The frontend requires the listing to be for PunksMarket, but the V1 campaign contract remains the final authority.
+
+Deploy the optional market Workers:
 
 ```bash
 npx wrangler login
 npx wrangler deploy --config workers/cryptopunks-market/wrangler.toml
+npx wrangler deploy --config workers/v1-punksmarket/wrangler.toml
 ```
 
 After deploy, check the Worker directly:
 
 ```bash
 curl https://fundpunks.nuconomy.workers.dev/market
+curl https://fundpunks-v1-punksmarket.nuconomy.workers.dev/market
 ```
 
 Verify the factory after deployment:

@@ -9,14 +9,71 @@ import heroPunk from './assets/prepunk.png'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const FACTORY_ADDRESS = import.meta.env.VITE_FACTORY_ADDRESS || ZERO_ADDRESS
+const V1_FACTORY_ADDRESS = import.meta.env.VITE_V1_FACTORY_ADDRESS || ZERO_ADDRESS
 const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
 const FEATURED_CAMPAIGN_ADDRESS = import.meta.env.VITE_FEATURED_CAMPAIGN_ADDRESS || ''
+const V1_FEATURED_CAMPAIGN_ADDRESS = import.meta.env.VITE_V1_FEATURED_CAMPAIGN_ADDRESS || ''
 const SUGGESTED_CAMPAIGN_ADDRESSES = import.meta.env.VITE_SUGGESTED_CAMPAIGN_ADDRESSES || ''
+const V1_SUGGESTED_CAMPAIGN_ADDRESSES = import.meta.env.VITE_V1_SUGGESTED_CAMPAIGN_ADDRESSES || ''
 const MARKET_WORKER_URL = (import.meta.env.VITE_CRYPTOPUNKS_MARKET_WORKER_URL || '').trim()
+const V1_PUNKSMARKET_WORKER_URL = (import.meta.env.VITE_V1_PUNKSMARKET_WORKER_URL || '').trim()
 const MARKET_CANDIDATE_LIMIT = 48
 const CRYPTOPUNKS_MARKET_ADDRESS = '0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB'
+const CRYPTOPUNKS_V1_MARKET_ADDRESS = '0x6Ba6f2207e343923BA692e5Cae646Fb0F566DB8D'
+const PUNKS_MARKET_ADDRESS = '0x64e507FEBF26521b73FbdfA533106B2042533218'
 const PROTOCOL_GUILD_ADDRESS = '0x25941dC771bB64514Fc8abBce970307Fb9d477e9'
 const hasReadTransport = Boolean(MAINNET_RPC_URL)
+
+const MARKET_MODES = {
+  v2: {
+    key: 'v2',
+    shortLabel: 'CryptoPunks',
+    tabLabel: 'CryptoPunks (Official)',
+    campaignLabel: 'CryptoPunks',
+    factoryEnvVar: 'VITE_FACTORY_ADDRESS',
+    factoryAddress: FACTORY_ADDRESS,
+    featuredCampaignAddress: FEATURED_CAMPAIGN_ADDRESS,
+    suggestedCampaignAddresses: SUGGESTED_CAMPAIGN_ADDRESSES,
+    workerUrl: MARKET_WORKER_URL,
+    workerEnvVar: 'VITE_CRYPTOPUNKS_MARKET_WORKER_URL',
+    marketAddress: CRYPTOPUNKS_MARKET_ADDRESS,
+    requiredOnlySellTo: ZERO_ADDRESS,
+    requiresSellerOwnerCheck: false,
+    listingName: 'CryptoPunks Marketplace Listings',
+    listingBadge: 'Public listing',
+    marketMetaLabel: 'Original CryptoPunks market',
+    marketIntro: 'Choose the floor to preserve more change, or pick any verified public listing that fits the campaign target.',
+    targetIntro: 'These listings are verified public offers at or below the selected campaign target.',
+    loadingText: 'Loading live market candidates and verifying listings onchain...',
+    disabledText: 'Set VITE_CRYPTOPUNKS_MARKET_WORKER_URL to enable live listing suggestions.',
+    emptyWithBudgetText: 'No verified public listings fit this campaign target right now.',
+    emptyWithoutBudgetText: 'Verified listings load against the selected campaign target.',
+  },
+  v1: {
+    key: 'v1',
+    shortLabel: 'CryptoPunks V1',
+    tabLabel: 'CryptoPunks V1',
+    campaignLabel: 'CryptoPunks V1',
+    factoryEnvVar: 'VITE_V1_FACTORY_ADDRESS',
+    factoryAddress: V1_FACTORY_ADDRESS,
+    featuredCampaignAddress: V1_FEATURED_CAMPAIGN_ADDRESS,
+    suggestedCampaignAddresses: V1_SUGGESTED_CAMPAIGN_ADDRESSES,
+    workerUrl: V1_PUNKSMARKET_WORKER_URL,
+    workerEnvVar: 'VITE_V1_PUNKSMARKET_WORKER_URL',
+    marketAddress: CRYPTOPUNKS_V1_MARKET_ADDRESS,
+    requiredOnlySellTo: PUNKS_MARKET_ADDRESS,
+    requiresSellerOwnerCheck: true,
+    listingName: 'CryptoPunks V1 PunksMarket Listings',
+    listingBadge: 'PunksMarket listing',
+    marketMetaLabel: 'Original CryptoPunks V1 contract',
+    marketIntro: 'Choose from verified CryptoPunks V1 PunksMarket Listings that fit the campaign target.',
+    targetIntro: 'These CryptoPunks V1 PunksMarket Listings are verified onchain before purchase.',
+    loadingText: 'Loading CryptoPunks V1 PunksMarket listings and verifying them onchain...',
+    disabledText: 'Set VITE_V1_PUNKSMARKET_WORKER_URL to enable CryptoPunks V1 PunksMarket Listings.',
+    emptyWithBudgetText: 'No verified CryptoPunks V1 PunksMarket Listings fit this campaign target right now.',
+    emptyWithoutBudgetText: 'CryptoPunks V1 PunksMarket Listings load against the selected campaign target.',
+  },
+}
 
 const factoryAbi = [
   {
@@ -47,6 +104,7 @@ const campaignAbi = [
   { inputs: [], name: 'getState', outputs: [{ type: 'uint8' }], stateMutability: 'view', type: 'function' },
   { inputs: [], name: 'creator', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
   { inputs: [], name: 'cryptopunksMarket', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'directedPunksMarket', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
   { inputs: [], name: 'donationRecipient', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
   { inputs: [], name: 'contribute', outputs: [], stateMutability: 'payable', type: 'function' },
   { inputs: [{ name: 'punkId', type: 'uint256' }, { name: 'maxPriceWei', type: 'uint256' }], name: 'attemptBuy', outputs: [], stateMutability: 'nonpayable', type: 'function' },
@@ -57,6 +115,13 @@ const campaignAbi = [
 ]
 
 const cryptopunksMarketAbi = [
+  {
+    inputs: [{ name: 'punkIndex', type: 'uint256' }],
+    name: 'punkIndexToAddress',
+    outputs: [{ name: 'owner', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
   {
     inputs: [{ name: 'punkIndex', type: 'uint256' }],
     name: 'punksOfferedForSale',
@@ -142,11 +207,15 @@ function normalizeMarketIndex(payload) {
   }
 }
 
-function getOfferTuple(readResult) {
+function getReadResult(readResult) {
   if (!readResult) return undefined
   if (readResult.status && readResult.status !== 'success') return undefined
 
-  const result = typeof readResult === 'object' && 'result' in readResult ? readResult.result : readResult
+  return typeof readResult === 'object' && 'result' in readResult ? readResult.result : readResult
+}
+
+function getOfferTuple(readResult) {
+  const result = getReadResult(readResult)
   return Array.isArray(result) ? result : undefined
 }
 
@@ -230,7 +299,17 @@ function getInitialCampaignAddress() {
   return isAddress(candidate) ? candidate : ''
 }
 
+function getInitialMarketKind() {
+  if (typeof window === 'undefined') return 'v2'
+
+  const params = new URLSearchParams(window.location.search)
+  const mode = (params.get('mode') || params.get('market') || '').toLowerCase()
+  return mode === 'v1' ? 'v1' : 'v2'
+}
+
 function AppInner() {
+  const [marketKind, setMarketKind] = useState(getInitialMarketKind)
+  const marketConfig = MARKET_MODES[marketKind]
   const [campaignAddr, setCampaignAddr] = useState(getInitialCampaignAddress)
   const [budgetEth, setBudgetEth] = useState('31')
   const [budgetEdited, setBudgetEdited] = useState(false)
@@ -241,9 +320,10 @@ function AppInner() {
   const [buyPunkId, setBuyPunkId] = useState('')
   const [buyMaxEth, setBuyMaxEth] = useState('31')
   const [buyFormEdited, setBuyFormEdited] = useState(false)
+  const [confettiBurst, setConfettiBurst] = useState(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [marketIndex, setMarketIndex] = useState(() => ({
-    status: MARKET_WORKER_URL ? 'loading' : 'disabled',
+    status: MARKET_MODES[getInitialMarketKind()].workerUrl ? 'loading' : 'disabled',
     data: null,
     error: '',
   }))
@@ -254,7 +334,7 @@ function AppInner() {
   }, [])
 
   useEffect(() => {
-    if (!MARKET_WORKER_URL) {
+    if (!marketConfig.workerUrl) {
       setMarketIndex({ status: 'disabled', data: null, error: '' })
       return undefined
     }
@@ -270,11 +350,11 @@ function AppInner() {
       }))
 
       try {
-        const url = new URL(MARKET_WORKER_URL)
+        const url = new URL(marketConfig.workerUrl)
         url.searchParams.set('limit', String(MARKET_CANDIDATE_LIMIT))
 
         const response = await fetch(url, { headers: { Accept: 'application/json' } })
-        if (!response.ok) throw new Error(`Market worker returned ${response.status}`)
+        if (!response.ok) throw new Error(`Listings worker returned ${response.status}`)
 
         const payload = await response.json()
         const normalized = normalizeMarketIndex(payload)
@@ -287,7 +367,7 @@ function AppInner() {
           setMarketIndex((current) => ({
             ...current,
             status: 'error',
-            error: error instanceof Error ? error.message : 'Market index failed',
+            error: error instanceof Error ? error.message : 'Listings index failed',
           }))
         }
       }
@@ -300,17 +380,17 @@ function AppInner() {
       cancelled = true
       window.clearInterval(intervalId)
     }
-  }, [])
+  }, [marketConfig.workerUrl])
 
   const { address, isConnected } = useAccount()
   const { connect } = useConnect()
   const { disconnect } = useDisconnect()
   const { writeContractAsync } = useWriteContract()
 
-  const factoryReady = isAddress(FACTORY_ADDRESS) && FACTORY_ADDRESS !== ZERO_ADDRESS
+  const factoryReady = isAddress(marketConfig.factoryAddress) && marketConfig.factoryAddress !== ZERO_ADDRESS
 
   const factoryCampaigns = useReadContract({
-    address: FACTORY_ADDRESS,
+    address: marketConfig.factoryAddress,
     abi: factoryAbi,
     functionName: 'allCampaigns',
     query: { enabled: factoryReady && hasReadTransport },
@@ -318,12 +398,12 @@ function AppInner() {
 
   const configuredCampaigns = useMemo(() => {
     const candidates = [
-      FEATURED_CAMPAIGN_ADDRESS,
-      ...SUGGESTED_CAMPAIGN_ADDRESSES.split(','),
+      marketConfig.featuredCampaignAddress,
+      ...marketConfig.suggestedCampaignAddresses.split(','),
     ]
 
     return candidates.map((value) => value.trim()).filter(isAddress)
-  }, [])
+  }, [marketConfig.featuredCampaignAddress, marketConfig.suggestedCampaignAddresses])
 
   const factoryCampaignList = useMemo(() => {
     const seen = new Set()
@@ -375,6 +455,12 @@ function AppInner() {
     query: { enabled: Boolean(isAddress(creator.data) && hasReadTransport) },
   })
   const market = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'cryptopunksMarket', query: { enabled: campaignReadEnabled } })
+  const directedMarket = useReadContract({
+    address: selectedCampaignAddr,
+    abi: campaignAbi,
+    functionName: 'directedPunksMarket',
+    query: { enabled: campaignReadEnabled && marketConfig.key === 'v1' },
+  })
   const donation = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'donationRecipient', query: { enabled: campaignReadEnabled } })
   const campaignBalance = useBalance({
     address: selectedCampaignAddr,
@@ -384,12 +470,12 @@ function AppInner() {
   const marketCandidateIds = useMemo(() => marketIndex.data?.candidateIds || [], [marketIndex.data])
   const marketReadContracts = useMemo(() => (
     marketCandidateIds.map((punkId) => ({
-      address: CRYPTOPUNKS_MARKET_ADDRESS,
+      address: marketConfig.marketAddress,
       abi: cryptopunksMarketAbi,
       functionName: 'punksOfferedForSale',
       args: [BigInt(punkId)],
     }))
-  ), [marketCandidateIds])
+  ), [marketCandidateIds, marketConfig.marketAddress])
   const offerReads = useReadContracts({
     allowFailure: true,
     contracts: marketReadContracts,
@@ -398,8 +484,28 @@ function AppInner() {
       refetchInterval: 60000,
     },
   })
-  const verifiedPublicListings = useMemo(() => {
+  const ownerReadContracts = useMemo(() => (
+    marketConfig.requiresSellerOwnerCheck
+      ? marketCandidateIds.map((punkId) => ({
+          address: marketConfig.marketAddress,
+          abi: cryptopunksMarketAbi,
+          functionName: 'punkIndexToAddress',
+          args: [BigInt(punkId)],
+        }))
+      : []
+  ), [marketCandidateIds, marketConfig.marketAddress, marketConfig.requiresSellerOwnerCheck])
+  const ownerReads = useReadContracts({
+    allowFailure: true,
+    contracts: ownerReadContracts,
+    query: {
+      enabled: hasReadTransport && ownerReadContracts.length > 0,
+      refetchInterval: 60000,
+    },
+  })
+  const verifiedListings = useMemo(() => {
     const listings = []
+    const expectedSellTo = marketConfig.requiredOnlySellTo.toLowerCase()
+    const creatorAddress = isAddress(creator.data) ? creator.data.toLowerCase() : ''
 
     marketCandidateIds.forEach((punkId, index) => {
       const tuple = getOfferTuple(offerReads.data?.[index])
@@ -408,13 +514,19 @@ function AppInner() {
       const [isForSale, punkIndexOut, seller, minValue, onlySellTo] = tuple
       const verifiedPunkId = Number(punkIndexOut ?? punkId)
       const minValueWei = minValue === undefined || minValue === null ? 0n : BigInt(minValue)
+      const sellerAddress = String(seller || ZERO_ADDRESS).toLowerCase()
       const sellTo = String(onlySellTo || ZERO_ADDRESS).toLowerCase()
+      const currentOwner = marketConfig.requiresSellerOwnerCheck
+        ? String(getReadResult(ownerReads.data?.[index]) || ZERO_ADDRESS).toLowerCase()
+        : ''
 
       if (
         !isForSale ||
         verifiedPunkId !== punkId ||
         minValueWei <= 0n ||
-        sellTo !== ZERO_ADDRESS
+        sellTo !== expectedSellTo ||
+        (marketConfig.requiresSellerOwnerCheck && currentOwner !== sellerAddress) ||
+        (marketConfig.key === 'v1' && creatorAddress && sellerAddress === creatorAddress)
       ) {
         return
       }
@@ -423,16 +535,16 @@ function AppInner() {
     })
 
     return listings.sort((a, b) => a.minValue < b.minValue ? -1 : a.minValue > b.minValue ? 1 : a.punkId - b.punkId)
-  }, [marketCandidateIds, offerReads.data])
-  const verifiedFloorListing = verifiedPublicListings[0]
+  }, [marketCandidateIds, offerReads.data, ownerReads.data, creator.data, marketConfig.key, marketConfig.requiredOnlySellTo, marketConfig.requiresSellerOwnerCheck])
+  const verifiedFloorListing = verifiedListings[0]
   const affordableListings = useMemo(() => {
     if (!budget.data) return []
-    return verifiedPublicListings.filter((listing) => listing.minValue <= budget.data).slice(0, 12)
-  }, [budget.data, verifiedPublicListings])
+    return verifiedListings.filter((listing) => listing.minValue <= budget.data).slice(0, 12)
+  }, [budget.data, verifiedListings])
   const selectedPunkId = normalizePunkId(buyPunkId)
   const selectedListing = useMemo(
-    () => verifiedPublicListings.find((listing) => listing.punkId === selectedPunkId),
-    [selectedPunkId, verifiedPublicListings],
+    () => verifiedListings.find((listing) => listing.punkId === selectedPunkId),
+    [selectedPunkId, verifiedListings],
   )
   const selectedFundingKnown = selectedListing
     ? campaignBalance.data?.value !== undefined && raised.data !== undefined && budget.data !== undefined
@@ -449,6 +561,12 @@ function AppInner() {
   const selectedBuyUnavailable = Boolean(
     selectedListing && (!selectedFundingKnown || selectedAboveBudget || selectedFundsShortfall > 0n),
   )
+  const selectedProjectedProtocolDonationWei = selectedListing &&
+    budget.data !== undefined &&
+    !selectedAboveBudget &&
+    budget.data > selectedListing.minValue
+    ? budget.data - selectedListing.minValue
+    : 0n
   const selectedProtocolDonationWei = selectedListing &&
     selectedFundingKnown &&
     !selectedAboveBudget &&
@@ -499,14 +617,42 @@ function AppInner() {
     selectedCampaignAddr.toLowerCase() === featuredCampaign.toLowerCase(),
   )
   const creatorDisplayLabel = creatorEnsName.data || (isAddress(creator.data) ? shortAddress(creator.data) : '')
-  const campaignHeading = selectedCampaignIsFeatured
-    ? 'The first FundPunks campaign is live.'
-    : 'This FundPunks campaign is live.'
-  const campaignIntro = selectedCampaignIsFeatured
-    ? 'You are viewing the launch campaign from the creator of FundPunks. Donate here, or paste any factory-created campaign address to inspect and support another Punk dream.'
-    : creatorDisplayLabel
-      ? `You are viewing a factory-created FundPunks campaign launched by ${creatorDisplayLabel}. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.`
-      : 'You are viewing a factory-created FundPunks campaign. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.'
+  const campaignHeading = !campaignEnabled
+    ? `${marketConfig.campaignLabel} FundPunks campaigns are waiting for a factory.`
+    : selectedCampaignIsFeatured
+      ? `The first ${marketConfig.campaignLabel} FundPunks campaign is live.`
+      : `This ${marketConfig.campaignLabel} FundPunks campaign is live.`
+  const campaignIntro = !campaignEnabled
+    ? `Set ${marketConfig.factoryEnvVar} or paste a campaign address created by the verified ${marketConfig.campaignLabel} factory.`
+    : selectedCampaignIsFeatured
+      ? `You are viewing the featured ${marketConfig.campaignLabel} campaign. Donate here, or paste any factory-created campaign address to inspect and support another Punk dream.`
+      : creatorDisplayLabel
+        ? `You are viewing a factory-created ${marketConfig.campaignLabel} FundPunks campaign launched by ${creatorDisplayLabel}. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.`
+        : `You are viewing a factory-created ${marketConfig.campaignLabel} FundPunks campaign. Donate here, or paste another factory-created campaign address to inspect and support a different Punk dream.`
+  const listingVerificationLoading = marketReadContracts.length > 0 && (
+    (!offerReads.data && offerReads.isFetching) ||
+    (marketConfig.requiresSellerOwnerCheck && !ownerReads.data && ownerReads.isFetching)
+  )
+
+  function selectMarketKind(nextKind) {
+    if (nextKind === marketKind) return
+
+    const nextConfig = MARKET_MODES[nextKind]
+    setMarketKind(nextKind)
+    setCampaignAddr('')
+    setBuyPunkId('')
+    setBuyMaxEth('')
+    setMarketIndex({ status: nextConfig.workerUrl ? 'loading' : 'disabled', data: null, error: '' })
+    setBudgetEdited(false)
+    setBuyFormEdited(false)
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('mode', nextKind)
+      url.searchParams.delete('campaign')
+      window.history.replaceState({}, '', url)
+    }
+  }
 
   useEffect(() => {
     if (!verifiedFloorListing || buyFormEdited) return
@@ -533,7 +679,7 @@ function AppInner() {
     const executionDeadline = fundingDeadline + Number(execDays) * 86400
 
     await writeContractAsync({
-      address: FACTORY_ADDRESS,
+      address: marketConfig.factoryAddress,
       abi: factoryAbi,
       functionName: 'createCampaign',
       args: [
@@ -551,6 +697,7 @@ function AppInner() {
       functionName: 'contribute',
       value: ethToWei(contribEth),
     })
+    setConfettiBurst((value) => value + 1)
   }
 
   async function executeBuy() {
@@ -580,6 +727,17 @@ function AppInner() {
 
   return (
     <main className="app-shell">
+      {confettiBurst > 0 && (
+        <div key={confettiBurst} className="confetti-burst" aria-hidden="true">
+          {Array.from({ length: 24 }, (_, index) => {
+            const x = `${(index % 12) * 8 + 5}vw`
+            const dx = `${((index % 5) - 2) * 26}px`
+            const delay = `${(index % 6) * 42}ms`
+            const rot = `${220 + index * 22}deg`
+            return <span key={index} style={{ '--x': x, '--dx': dx, '--delay': delay, '--rot': rot }} />
+          })}
+        </div>
+      )}
       <nav className="topbar" aria-label="Main">
         <a className="brand" href="#top" aria-label="FundPunks home">
           <span className="brand-mark" aria-hidden="true">FP</span>
@@ -623,7 +781,22 @@ function AppInner() {
         </div>
       </section>
 
-      <section id="campaign" className="campaign-layout">
+      <section id="campaign" className={`campaign-layout campaign-layout-${marketConfig.key}`}>
+        <div className="campaign-mode-bar">
+          <span>Campaign type</span>
+          <div className="market-mode-toggle" aria-label="Punk market mode">
+            {Object.values(MARKET_MODES).map((mode) => (
+              <button
+                key={mode.key}
+                type="button"
+                className={marketKind === mode.key ? 'active' : ''}
+                onClick={() => selectMarketKind(mode.key)}
+              >
+                {mode.tabLabel}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="campaign-panel">
           <div className="section-heading">
             <span className="eyebrow">Launch campaign live</span>
@@ -669,7 +842,7 @@ function AppInner() {
             <p className="form-note">Checking this campaign against the verified factory...</p>
           )}
           {requestedCampaignUnknown && (
-            <p className="form-note warning-note">This address is not listed by the verified FundPunks factory, so campaign actions are disabled.</p>
+            <p className="form-note warning-note">This address is not listed by the verified {marketConfig.campaignLabel} FundPunks factory, so campaign actions are disabled.</p>
           )}
 
             <div className="status-grid">
@@ -702,7 +875,7 @@ function AppInner() {
               {missingWei > 0n
                 ? `Still missing ${formatEth(missingWei)} before anyone can try to buy a listed Punk.`
                 : campaignReadEnabled
-                  ? 'Target met. Anyone onchain can try to buy a listed Punk that fits the campaign limits.'
+                  ? `Target met. Anyone onchain can try to buy a ${marketConfig.listingBadge.toLowerCase()} that fits the campaign limits.`
                   : 'Live progress loads from mainnet.'}
             </p>
             <div className="deadline-strip" aria-label="Campaign timing">
@@ -739,7 +912,10 @@ function AppInner() {
           <div className="address-list donation-meta">
             <CampaignMetaRow label="Selected campaign" value={selectedCampaignAddr} />
             <CampaignMetaRow label="Campaign creator wallet" value={creator.data} />
-            <CampaignMetaRow label="Original CryptoPunks market" value={market.data} />
+            <CampaignMetaRow label={marketConfig.marketMetaLabel} value={market.data} />
+            {marketConfig.key === 'v1' && (
+              <CampaignMetaRow label="PunksMarket contract" value={directedMarket.data} />
+            )}
             <CampaignMetaRow label="Change goes to Protocol Guild" value={donation.data} />
           </div>
         </form>
@@ -747,9 +923,9 @@ function AppInner() {
         <form className="market-buy-box" onSubmit={(e) => { e.preventDefault(); executeBuy() }}>
           <div className="market-buy-heading">
             <div>
-              <span className="eyebrow">Live market</span>
+              <span className="eyebrow">{marketConfig.listingName}</span>
               <h3>Choose the Punk to buy.</h3>
-              <p>Choose the floor to preserve more change, or pick any verified public listing that fits the campaign target.</p>
+              <p>{marketConfig.marketIntro}</p>
             </div>
             <div className="market-floor">
               <span>Verified floor</span>
@@ -770,7 +946,7 @@ function AppInner() {
                   alt={`CryptoPunk #${verifiedFloorListing.punkId}`}
                   loading="eager"
                 />
-                <span>Default floor</span>
+                <span>{marketConfig.listingBadge}</span>
                 <strong>#{verifiedFloorListing.punkId}</strong>
                 <small>{formatEth(verifiedFloorListing.minValue)}</small>
               </button>
@@ -779,16 +955,16 @@ function AppInner() {
             <div className="target-punk-panel">
               <div className="target-punk-heading">
                 <span>Inside campaign target</span>
-                <p>These listings are verified public offers at or below the selected campaign target.</p>
+                <p>{marketConfig.targetIntro}</p>
               </div>
 
               {marketIndex.status === 'disabled' ? (
-                <p className="form-note">Set VITE_CRYPTOPUNKS_MARKET_WORKER_URL to enable live listing suggestions.</p>
-              ) : marketIndex.status === 'loading' || (marketReadContracts.length > 0 && !offerReads.data && offerReads.isFetching) ? (
-                <p className="form-note">Loading live market candidates and verifying listings onchain...</p>
+                <p className="form-note">{marketConfig.disabledText}</p>
+              ) : marketIndex.status === 'loading' || listingVerificationLoading ? (
+                <p className="form-note">{marketConfig.loadingText}</p>
               ) : marketIndex.status === 'error' && !marketIndex.data ? (
                 <p className="form-note warning-note">Live listings are unavailable.</p>
-              ) : offerReads.isError ? (
+              ) : offerReads.isError || ownerReads.isError ? (
                 <p className="form-note warning-note">Live listing verification is unavailable.</p>
               ) : affordableListings.length > 0 ? (
                 <div className="market-carousel" aria-label="Verified affordable listings">
@@ -813,8 +989,8 @@ function AppInner() {
               ) : (
                 <p className="form-note">
                   {budget.data
-                    ? 'No verified public listings fit this campaign target right now.'
-                    : 'Verified listings load against the selected campaign target.'}
+                    ? marketConfig.emptyWithBudgetText
+                    : marketConfig.emptyWithoutBudgetText}
                 </p>
               )}
 
@@ -853,11 +1029,20 @@ function AppInner() {
                   {!selectedFundingKnown ? (
                     <>Checking campaign funds for Punk #{selectedListing.punkId}.</>
                   ) : selectedAboveBudget ? (
-                    <>Punk #{selectedListing.punkId} is above this campaign target. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} is above this campaign target.</span>
+                      <span>The current target cannot buy it.</span>
+                    </>
                   ) : selectedFundsShortfall > 0n ? (
-                    <>Punk #{selectedListing.punkId} needs <strong>{formatEth(selectedFundsShortfall)}</strong> more before purchase. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} needs <strong>{formatEth(selectedFundsShortfall)}</strong> more before purchase.</span>
+                      <span>Projected Protocol Guild donation at target: <strong>{formatEth(selectedProjectedProtocolDonationWei)}</strong>.</span>
+                    </>
                   ) : (
-                    <>Estimated Protocol Guild donation after purchase: <strong>{formatEth(selectedProtocolDonationWei)}</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} is ready to buy.</span>
+                      <span>Estimated Protocol Guild donation after purchase: <strong>{formatEth(selectedProtocolDonationWei)}</strong>.</span>
+                    </>
                   )}
                 </p>
               ) : (
@@ -871,9 +1056,9 @@ function AppInner() {
       <section id="factory" className="factory-section" aria-label="Factory">
         <div className="section-heading">
           <span className="eyebrow">Perpetual Punk Funding Machine</span>
-          <h2>Anyone can launch the next campaign.</h2>
+          <h2>Anyone can launch the next {marketConfig.campaignLabel} campaign.</h2>
           <p>
-            One factory, many FundPunk campaigns. Bring your CryptoPunk dreams, set the terms, and let the crowd decide.
+            One factory, many FundPunk campaigns. Bring your {marketConfig.campaignLabel} dreams, set the terms, and let the crowd decide.
           </p>
         </div>
         <form className="factory-form" onSubmit={(e) => { e.preventDefault(); createCampaign() }}>
@@ -895,7 +1080,7 @@ function AppInner() {
           </Field>
           <button className="button primary" disabled={!factoryReady}>Create campaign</button>
         </form>
-        {!factoryReady && <p className="deploy-note">Factory address is still a placeholder. Vision: loud. Deployment: pending.</p>}
+        {!factoryReady && <p className="deploy-note">{marketConfig.campaignLabel} factory address is still a placeholder. Vision: loud. Deployment: pending.</p>}
       </section>
 
       <details className="danger-zone control-panel">
