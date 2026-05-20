@@ -561,6 +561,12 @@ function AppInner() {
   const selectedBuyUnavailable = Boolean(
     selectedListing && (!selectedFundingKnown || selectedAboveBudget || selectedFundsShortfall > 0n),
   )
+  const selectedProjectedProtocolDonationWei = selectedListing &&
+    budget.data !== undefined &&
+    !selectedAboveBudget &&
+    budget.data > selectedListing.minValue
+    ? budget.data - selectedListing.minValue
+    : 0n
   const selectedProtocolDonationWei = selectedListing &&
     selectedFundingKnown &&
     !selectedAboveBudget &&
@@ -1023,11 +1029,20 @@ function AppInner() {
                   {!selectedFundingKnown ? (
                     <>Checking campaign funds for Punk #{selectedListing.punkId}.</>
                   ) : selectedAboveBudget ? (
-                    <>Punk #{selectedListing.punkId} is above this campaign target. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} is above this campaign target.</span>
+                      <span>The current target cannot buy it.</span>
+                    </>
                   ) : selectedFundsShortfall > 0n ? (
-                    <>Punk #{selectedListing.punkId} needs <strong>{formatEth(selectedFundsShortfall)}</strong> more before purchase. Estimated Protocol Guild donation: <strong>0 ETH</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} needs <strong>{formatEth(selectedFundsShortfall)}</strong> more before purchase.</span>
+                      <span>Projected Protocol Guild donation at target: <strong>{formatEth(selectedProjectedProtocolDonationWei)}</strong>.</span>
+                    </>
                   ) : (
-                    <>Estimated Protocol Guild donation after purchase: <strong>{formatEth(selectedProtocolDonationWei)}</strong>.</>
+                    <>
+                      <span>Punk #{selectedListing.punkId} is ready to buy.</span>
+                      <span>Estimated Protocol Guild donation after purchase: <strong>{formatEth(selectedProtocolDonationWei)}</strong>.</span>
+                    </>
                   )}
                 </p>
               ) : (
