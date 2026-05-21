@@ -90,15 +90,15 @@ h3 {
 
 .confetti-burst span {
   position: absolute;
-  top: -18px;
+  top: -40px;
   left: var(--x);
-  width: 10px;
-  height: 16px;
+  width: 14px;
+  height: 24px;
   border: 2px solid var(--ink);
   background: var(--pink);
   opacity: 0;
-  transform: translate3d(0, -24px, 0) rotate(0deg);
-  animation: confetti-fall 1200ms cubic-bezier(0.16, 0.8, 0.32, 1) var(--delay) forwards;
+  transform: translate3d(0, -48px, 0) rotate(0deg) scale(var(--scale));
+  animation: confetti-fall 2600ms cubic-bezier(0.12, 0.72, 0.22, 1) var(--delay) forwards;
 }
 
 .confetti-burst span:nth-child(3n + 1) {
@@ -110,23 +110,31 @@ h3 {
 }
 
 .confetti-burst span:nth-child(2n) {
-  width: 14px;
-  height: 10px;
+  width: 20px;
+  height: 14px;
+}
+
+.confetti-burst span:nth-child(5n) {
+  border-radius: 999px;
 }
 
 @keyframes confetti-fall {
   0% {
     opacity: 0;
-    transform: translate3d(0, -24px, 0) rotate(0deg);
+    transform: translate3d(0, -48px, 0) rotate(0deg) scale(var(--scale));
   }
 
-  12% {
+  8% {
+    opacity: 1;
+  }
+
+  72% {
     opacity: 1;
   }
 
   100% {
     opacity: 0;
-    transform: translate3d(var(--dx), 74vh, 0) rotate(var(--rot));
+    transform: translate3d(var(--dx), 112vh, 0) rotate(var(--rot)) scale(var(--scale));
   }
 }
 

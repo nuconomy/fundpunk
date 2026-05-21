@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { waitForTransactionReceipt } from '@wagmi/core'
+import { readContractQueryKey } from '@wagmi/core/query'
 import { createConfig, http, useAccount, useBalance, useConnect, useDisconnect, useEnsName, useReadContract, useReadContracts, useWriteContract } from 'wagmi'
 import { mainnet } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
 import { WagmiProvider } from 'wagmi'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { formatEther, parseEther } from 'viem'
 import heroPunk from './assets/prepunk.png'
 
@@ -23,6 +25,18 @@ const CRYPTOPUNKS_V1_MARKET_ADDRESS = '0x6Ba6f2207e343923BA692e5Cae646Fb0F566DB8
 const PUNKS_MARKET_ADDRESS = '0x64e507FEBF26521b73FbdfA533106B2042533218'
 const PROTOCOL_GUILD_ADDRESS = '0x25941dC771bB64514Fc8abBce970307Fb9d477e9'
 const hasReadTransport = Boolean(MAINNET_RPC_URL)
+const LIVE_CAMPAIGN_REFETCH_MS = 15000
+const DEFAULT_CAMPAIGN_PRELOAD_STALE_MS = 30000
+const DEFAULT_CAMPAIGN_PRELOAD_FUNCTIONS = [
+  'purchaseBudgetWei',
+  'totalRaised',
+  'getState',
+  'fundingDeadline',
+  'executionDeadline',
+  'creator',
+  'cryptopunksMarket',
+  'donationRecipient',
+]
 
 const MARKET_MODES = {
   v2: {
@@ -292,6 +306,60 @@ function CampaignMetaRow({ label, value }) {
   )
 }
 
+function DefaultCampaignPreloader() {
+  const queryClient = useQueryClient()
+  const contracts = useMemo(() => {
+    const seen = new Set()
+    const preloadContracts = []
+    const campaigns = [
+      { address: FEATURED_CAMPAIGN_ADDRESS, functions: DEFAULT_CAMPAIGN_PRELOAD_FUNCTIONS },
+      { address: V1_FEATURED_CAMPAIGN_ADDRESS, functions: [...DEFAULT_CAMPAIGN_PRELOAD_FUNCTIONS, 'directedPunksMarket'] },
+    ]
+
+    campaigns.forEach(({ address, functions }) => {
+      if (!isAddress(address)) return
+
+      functions.forEach((functionName) => {
+        const key = `${address.toLowerCase()}:${functionName}`
+        if (seen.has(key)) return
+        seen.add(key)
+        preloadContracts.push({
+          address,
+          abi: campaignAbi,
+          functionName,
+          chainId: mainnet.id,
+        })
+      })
+    })
+
+    return preloadContracts
+  }, [])
+  const preloadReads = useReadContracts({
+    allowFailure: true,
+    contracts,
+    query: {
+      enabled: hasReadTransport && contracts.length > 0,
+      staleTime: DEFAULT_CAMPAIGN_PRELOAD_STALE_MS,
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
+    },
+  })
+
+  useEffect(() => {
+    if (!preloadReads.data) return
+
+    preloadReads.data.forEach((readResult, index) => {
+      const contract = contracts[index]
+      const result = getReadResult(readResult)
+      if (!contract || result === undefined) return
+
+      queryClient.setQueryData(readContractQueryKey(contract), result)
+    })
+  }, [contracts, preloadReads.data, queryClient])
+
+  return null
+}
+
 function getInitialCampaignAddress() {
   if (typeof window === 'undefined') return ''
 
@@ -444,8 +512,8 @@ function AppInner() {
   const campaignReadEnabled = campaignEnabled && hasReadTransport
 
   const budget = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'purchaseBudgetWei', query: { enabled: campaignReadEnabled } })
-  const raised = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'totalRaised', query: { enabled: campaignReadEnabled } })
-  const state = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'getState', query: { enabled: campaignReadEnabled } })
+  const raised = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'totalRaised', query: { enabled: campaignReadEnabled, refetchInterval: LIVE_CAMPAIGN_REFETCH_MS } })
+  const state = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'getState', query: { enabled: campaignReadEnabled, refetchInterval: LIVE_CAMPAIGN_REFETCH_MS } })
   const fundingDeadline = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'fundingDeadline', query: { enabled: campaignReadEnabled } })
   const executionDeadline = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'executionDeadline', query: { enabled: campaignReadEnabled } })
   const creator = useReadContract({ address: selectedCampaignAddr, abi: campaignAbi, functionName: 'creator', query: { enabled: campaignReadEnabled } })
@@ -465,8 +533,18 @@ function AppInner() {
   const campaignBalance = useBalance({
     address: selectedCampaignAddr,
     chainId: mainnet.id,
-    query: { enabled: campaignReadEnabled },
+    query: { enabled: campaignReadEnabled, refetchInterval: LIVE_CAMPAIGN_REFETCH_MS },
   })
+  function refreshCampaignReads() {
+    if (!campaignReadEnabled) return Promise.resolve()
+
+    return Promise.all([
+      raised.refetch(),
+      state.refetch(),
+      campaignBalance.refetch(),
+    ])
+  }
+
   const marketCandidateIds = useMemo(() => marketIndex.data?.candidateIds || [], [marketIndex.data])
   const marketReadContracts = useMemo(() => (
     marketCandidateIds.map((punkId) => ({
@@ -691,12 +769,14 @@ function AppInner() {
   }
 
   async function contribute() {
-    await writeContractAsync({
+    const hash = await writeContractAsync({
       address: selectedCampaignAddr,
       abi: campaignAbi,
       functionName: 'contribute',
       value: ethToWei(contribEth),
     })
+    await waitForTransactionReceipt(config, { chainId: mainnet.id, hash })
+    await refreshCampaignReads()
     setConfettiBurst((value) => value + 1)
   }
 
@@ -729,12 +809,13 @@ function AppInner() {
     <main className="app-shell">
       {confettiBurst > 0 && (
         <div key={confettiBurst} className="confetti-burst" aria-hidden="true">
-          {Array.from({ length: 24 }, (_, index) => {
-            const x = `${(index % 12) * 8 + 5}vw`
-            const dx = `${((index % 5) - 2) * 26}px`
-            const delay = `${(index % 6) * 42}ms`
-            const rot = `${220 + index * 22}deg`
-            return <span key={index} style={{ '--x': x, '--dx': dx, '--delay': delay, '--rot': rot }} />
+          {Array.from({ length: 72 }, (_, index) => {
+            const x = `${(index % 18) * 5.5 + 1.5}vw`
+            const dx = `${((index % 7) - 3) * 34}px`
+            const delay = `${(index % 12) * 45}ms`
+            const rot = `${360 + index * 29}deg`
+            const scale = `${1 + (index % 4) * 0.18}`
+            return <span key={index} style={{ '--x': x, '--dx': dx, '--delay': delay, '--rot': rot, '--scale': scale }} />
           })}
         </div>
       )}
@@ -982,7 +1063,7 @@ function AppInner() {
                       />
                       <span>#{listing.punkId}</span>
                       <strong>{formatEth(listing.minValue)}</strong>
-                      <small>Fill buy form</small>
+                      <small>Choose Punk</small>
                     </button>
                   ))}
                 </div>
@@ -1237,6 +1318,7 @@ export default function App() {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={qc}>
+        <DefaultCampaignPreloader />
         <AppInner />
       </QueryClientProvider>
     </WagmiProvider>
