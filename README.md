@@ -2,7 +2,18 @@
 
 FundPunks is a trustless fundraising protocol for buying CryptoPunks. Anyone can launch a campaign. Anyone can donate. Once there is enough ETH for a Punk, anyone can execute the buy onchain. The campaign creator gets the Punk. Public goods get any change. If no purchase succeeds, contributors can claim a refund.
 
-The project includes smart contracts, frontend, deployment tooling, and documentation. It was partially inspired by [Buy Me A Punk](https://buymeapunk.xyz/) but is a completely orginal development by nuconomy.eth
+The project includes smart contracts, a public web app, deployment tooling, and documentation. It was partially inspired by [Buy Me A Punk](https://buymeapunk.xyz/), but is an original development by nuconomy.eth.
+
+## Quick Links
+
+- Live app: [fundpunks.com](https://fundpunks.com)
+- Decentralised IPFS/ENS app: [fundpunks.eth.limo](https://fundpunks.eth.limo)
+- Active mainnet contracts: [Active Deployments](#active-deployments)
+- Campaign launch and verification: [Launch And Verify A Campaign](#launch-and-verify-a-campaign)
+- Source contracts: [`contracts/`](contracts)
+- Frontend docs: [`web/README.md`](web/README.md)
+- Status: active on Ethereum mainnet, tested locally, simulated on mainnet forks, reviewed with multiple frontier AI models, not independently human-audited
+- Risk rule: only risk what you can afford to lose
 
 ## Design Constraints
 
@@ -53,27 +64,81 @@ FundPunks supports separate campaign contracts for original CryptoPunks and Cryp
 
 ### Original CryptoPunks
 
-Original CryptoPunks campaigns use `contracts/FundPunkFactory.sol` and `contracts/FundPunkCampaign.sol`.
+Original CryptoPunks campaigns use [`contracts/FundPunkFactory.sol`](contracts/FundPunkFactory.sol) and [`contracts/FundPunkCampaign.sol`](contracts/FundPunkCampaign.sol).
 
 `FundPunkCampaign` buys through the original CryptoPunks marketplace listed in [Active Deployments](#active-deployments). It accepts public listings and private listings directed to the campaign contract, verifies the seller still owns the Punk, buys the Punk into the campaign contract, transfers it to the campaign creator, then donates all leftover ETH to Protocol Guild.
 
 ### CryptoPunks V1
 
-CryptoPunks V1 campaigns use `contracts/FundV1PunkFactory.sol` and `contracts/FundV1PunkCampaign.sol`.
+CryptoPunks V1 campaigns use [`contracts/FundV1PunkFactory.sol`](contracts/FundV1PunkFactory.sol) and [`contracts/FundV1PunkCampaign.sol`](contracts/FundV1PunkCampaign.sol).
 
-`FundV1PunkCampaign` buys through the PunksMarket directed buyer against the original V1 CryptoPunks contract listed in [Active Deployments](#active-deployments). It only accepts listings directed to the PunksMarket adapter, rejects invalid Punk IDs and creator-owned seller listings, buys directly to the campaign creator, then donates all leftover ETH to Protocol Guild.
+`FundV1PunkCampaign` buys through the PunksMarket directed buyer against the original V1 CryptoPunks contract listed in [Active Deployments](#active-deployments). Because the original V1 contract is historically broken, V1 campaigns only settle PunksMarket-compatible listings directed to the PunksMarket adapter. Public V1 listings are intentionally rejected.
 
-Sellers must list through the original V1 contract with `offerPunkForSaleToAddress(punkId, price, 0x64e507FEBF26521b73FbdfA533106B2042533218)`. Public V1 listings are intentionally rejected.
+Sellers must list through the original V1 contract with `offerPunkForSaleToAddress(punkId, price, 0x64e507FEBF26521b73FbdfA533106B2042533218)`. The campaign verifies the listing, rejects invalid Punk IDs and creator-owned seller listings, buys directly to the campaign creator, then donates all leftover ETH to Protocol Guild.
 
 For more context on why PunksMarket-compatible listings are required and how PunksMarket settles them safely, see [punksmarket.app/about](https://punksmarket.app/about).
 
+## Web App
+
+The FundPunks web app is a Vite React interface in `web/`. It lets users create campaigns, contribute ETH, attempt permissionless Punk purchases, and claim refunds for regular CryptoPunks and CryptoPunks V1 campaigns.
+
+The app is currently available at [fundpunks.com](https://fundpunks.com). A decentralised IPFS version is served over ENS at [fundpunks.eth.limo](https://fundpunks.eth.limo).
+
+Frontend setup, environment variables, local development, build checks, deep links, and optional market Worker deployment are documented in [`web/README.md`](web/README.md).
+
+## Launch And Verify A Campaign
+
+You can launch a fundraising campaign from [fundpunks.com](https://fundpunks.com) or the decentralised IPFS/ENS version at [fundpunks.eth.limo](https://fundpunks.eth.limo).
+
+### Launch From The Live Site
+
+1. Choose the campaign mode: original CryptoPunks or CryptoPunks V1.
+2. Enter the purchase budget, funding deadline, and execution deadline.
+3. Submit the factory transaction from your wallet.
+4. Save the campaign address from the site, the transaction receipt, or the factory `CampaignCreated` event.
+5. Verify the new campaign contract on Etherscan.
+
+### Verify From This Repo
+
+Install dependencies first:
+
+```bash
+npm ci --ignore-scripts
+```
+
+Set the verification environment:
+
+- `MAINNET_RPC_URL`: an Ethereum mainnet RPC URL.
+- `ETHERSCAN_API_KEY`: an Etherscan API key.
+- `CAMPAIGN_ADDRESS`: the campaign contract address from the launch transaction.
+
+Regular CryptoPunks campaigns can be verified with:
+
+```bash
+MAINNET_RPC_URL=https://... \
+ETHERSCAN_API_KEY=... \
+CAMPAIGN_ADDRESS=0x... \
+npx hardhat run scripts/verify-campaign.cjs --network mainnet
+```
+
+CryptoPunks V1 campaigns can be verified with:
+
+```bash
+MAINNET_RPC_URL=https://... \
+ETHERSCAN_API_KEY=... \
+CAMPAIGN_ADDRESS=0x... \
+npx hardhat run scripts/verify-v1-campaign.cjs --network mainnet
+```
+
+Each campaign is a separate contract deployed by the relevant verified factory. Etherscan verification is an offchain step, so new campaign creators should verify their campaign contract after launch. V1 campaigns can only buy PunksMarket-compatible V1 listings directed to the PunksMarket adapter.
+
 ## Contracts
 
-- `contracts/FundPunkFactory.sol`: deploys campaign contracts and tracks created campaigns.
-- `contracts/FundPunkCampaign.sol`: accepts contributions, attempts CryptoPunk purchases through the hardcoded marketplace, transfers bought Punks, handles refunds, and donates purchase surplus to Protocol Guild.
-- `contracts/FundV1PunkFactory.sol`: deploys V1 campaign contracts and tracks created campaigns.
-- `contracts/FundV1PunkCampaign.sol`: accepts contributions, buys only CryptoPunks V1 listings directed to the PunksMarket adapter, sends the bought V1 Punk to the campaign creator, handles refunds, and donates purchase surplus to Protocol Guild.
-- `contracts/mocks/MockPunksMarket.sol`: test mock for the original CryptoPunks sale/transfer flow.
+- [`contracts/FundPunkFactory.sol`](contracts/FundPunkFactory.sol): deploys regular CryptoPunks campaign contracts and tracks created campaigns.
+- [`contracts/FundPunkCampaign.sol`](contracts/FundPunkCampaign.sol): accepts contributions, attempts CryptoPunk purchases through the hardcoded marketplace, transfers bought Punks, handles refunds, and donates purchase surplus to Protocol Guild.
+- [`contracts/FundV1PunkFactory.sol`](contracts/FundV1PunkFactory.sol): deploys CryptoPunks V1 campaign contracts and tracks created campaigns.
+- [`contracts/FundV1PunkCampaign.sol`](contracts/FundV1PunkCampaign.sol): accepts contributions, buys only CryptoPunks V1 listings directed to the PunksMarket adapter, sends the bought V1 Punk to the campaign creator, handles refunds, and donates purchase surplus to Protocol Guild.
+- [`contracts/mocks/MockPunksMarket.sol`](contracts/mocks/MockPunksMarket.sol): test mock for the original CryptoPunks sale/transfer flow.
 
 ### Key Factory Functions
 
@@ -105,44 +170,6 @@ Regular CryptoPunks campaigns have one additional recovery helper:
 
 See [Supported Campaign Types](#supported-campaign-types) for the marketplace settlement differences between original CryptoPunks and CryptoPunks V1 campaigns.
 
-## Web App
-
-The FundPunks web app is a Vite React interface in `web/`. It lets users create campaigns, contribute ETH, attempt permissionless Punk purchases, and claim refunds for regular CryptoPunks and CryptoPunks V1 campaigns.
-
-The app is currently available at [fundpunks.com](https://fundpunks.com). A decentralised IPFS version is served over ENS at [fundpunks.eth.limo](https://fundpunks.eth.limo).
-
-Frontend setup, environment variables, local development, build checks, deep links, and optional market Worker deployment are documented in [`web/README.md`](web/README.md).
-
-## Launch And Verify A Campaign
-
-You can launch a fundraising campaign from [fundpunks.com](https://fundpunks.com) or the decentralised IPFS/ENS version at [fundpunks.eth.limo](https://fundpunks.eth.limo).
-
-1. Choose the campaign mode: original CryptoPunks or CryptoPunks V1.
-2. Enter the purchase budget, funding deadline, and execution deadline.
-3. Submit the factory transaction from your wallet.
-4. Save the campaign address from the site, the transaction receipt, or the factory `CampaignCreated` event.
-5. Verify the new campaign contract on Etherscan.
-
-Regular CryptoPunks campaigns can be verified with:
-
-```bash
-MAINNET_RPC_URL=https://... \
-ETHERSCAN_API_KEY=... \
-CAMPAIGN_ADDRESS=0x... \
-npx hardhat run scripts/verify-campaign.cjs --network mainnet
-```
-
-CryptoPunks V1 campaigns can be verified with:
-
-```bash
-MAINNET_RPC_URL=https://... \
-ETHERSCAN_API_KEY=... \
-CAMPAIGN_ADDRESS=0x... \
-npx hardhat run scripts/verify-v1-campaign.cjs --network mainnet
-```
-
-Each campaign is a separate contract deployed by the relevant verified factory. Etherscan verification is an offchain step, so new campaign creators should verify their campaign contract after launch. V1 campaigns can only buy PunksMarket-compatible V1 listings directed to the PunksMarket adapter.
-
 ## Development
 
 Use Node.js 22 LTS or another Hardhat-supported even-numbered Node version.
@@ -165,7 +192,19 @@ Run a local mainnet-fork rehearsal against the real CryptoPunks contract:
 npx hardhat node --fork "$MAINNET_RPC_URL"
 ```
 
-In another terminal, deploy and create a local fork campaign, then run:
+In another terminal, deploy a local factory and create a local fork campaign:
+
+```bash
+npx hardhat run scripts/deploy.cjs --network localhost
+
+FACTORY_ADDRESS=0x... \
+PURCHASE_BUDGET_ETH=30 \
+FUNDING_DAYS=1 \
+EXECUTION_DAYS=1 \
+npx hardhat run scripts/create-campaign.cjs --network localhost
+```
+
+Then run the rehearsal with the campaign address printed by `scripts/create-campaign.cjs`:
 
 ```bash
 CAMPAIGN_ADDRESS=0x... \
@@ -226,29 +265,33 @@ CAMPAIGN_ADDRESS=0x... \
 npx hardhat run scripts/verify-v1-campaign.cjs --network mainnet
 ```
 
-## Safety Notes
+## Risk Notes
 
-A successful purchase is final for contributors: there are no ownership rights, claims on the Punk, financial returns, or refunds after a successful buy.
+FundPunks campaigns are donation-based. If a purchase succeeds, the campaign creator receives the Punk and contributors receive no token, fractional ownership, governance rights, claim on the Punk, financial return, or refund.
 
-If no purchase succeeds by the execution deadline, contributors can claim refunds after the execution deadline for their recorded contributions. There is no refund-claim expiry in the current contracts.
+If no purchase succeeds by the execution deadline, contributors can claim refunds for their recorded contributions. There is no refund-claim expiry in the current contracts.
 
-Anyone can call `enableRefundsIfExpired()` after the execution deadline to explicitly mark the campaign as refunding and emit the refund event. This is only a convenience for interfaces and observers; `claimRefund()` will also enable refunds automatically for the first valid claimant after expiry.
+Before a purchase succeeds, the campaign creator can cancel and immediately enable refunds. This is an emergency exit for cases where it no longer makes sense to keep accepting contributions or attempting buys.
 
-Refunds are pull-based and sent to the original contributor address. If a contributor is a smart contract or wallet that cannot receive ETH, its refund claim will revert and its contribution can remain locked in V1. Contributors should use an address that can receive plain ETH refunds.
+Refunds are pull-based and sent to the original contributor address. If a contributor is a smart contract or wallet that cannot receive plain ETH, its refund claim will revert. Contributors should use an address that can receive ETH.
 
-Before a purchase succeeds, the campaign creator can cancel early and immediately enable claimable refunds. This is intended as an emergency exit if a security issue, configuration issue, or other reason makes it unsafe to keep accepting contributions or attempting buys.
+Anyone can call `enableRefundsIfExpired()` after the execution deadline to explicitly mark the campaign as refunding. This is mostly useful for interfaces and observers; `claimRefund()` also enables refunds automatically for the first valid claimant after expiry.
 
 Plain ETH transfers to a campaign during funding are recorded as normal contributions and are subject to the same budget cap and excess-refund behavior. Plain ETH transfers outside the funding state revert. ETH that reaches the campaign without running contract code, such as forced ETH, is treated as untracked surplus: it does not increase the refundable contribution balance or the tracked purchase pool, and it can be donated to Protocol Guild without reducing contributor refunds.
 
 ## FAQ
 
-### What do I get?
+### Who gets the Punk?
 
-Nothing. No token, no claim, no governance, no financial upside. You get the memory of having done something extremely onchain.
+The campaign creator gets the Punk if a purchase succeeds. Contributors are donating to that outcome, not buying a share of the Punk.
+
+### Can contributors get a refund?
+
+Yes, if no purchase succeeds before the execution deadline or if the campaign creator cancels before a purchase. After a successful purchase, contributor refunds are no longer available.
 
 ### Is this audited?
 
-There has been no independent human smart-contract audit. See [Status](#status) for the current review and deployment context.
+There has been no independent human smart-contract audit. The contracts have been locally tested, reviewed with multiple frontier AI models, and exercised through mainnet-fork simulations. See [Status](#status) for the current review and deployment context.
 
 ### Why Protocol Guild?
 
